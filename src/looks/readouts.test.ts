@@ -26,7 +26,8 @@ test('drum looks count the hits so far, then bar and tempo; at most four columns
 
 test('bass looks name the note sounding now', () => {
   const bass = [{ time: 0, duration: 4, midi: 26, bends: [] }];
-  const r = readoutsFor(looks.glide, makeCtx(1, { bass }));
+  // 用不帶自訂讀數的 glide 測預設路徑（glide 自己的讀數是 NOTE / FREQUENCY …）
+  const r = readoutsFor({ ...looks.glide, readouts: undefined }, makeCtx(1, { bass }));
   expect(r[0]).toEqual({ label: 'BASS', value: 'D1' });
 });
 
