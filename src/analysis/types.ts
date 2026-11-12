@@ -3,6 +3,17 @@ export interface TempoMap {
   ppq: number;
   tempos: { ticks: number; bpm: number }[];
   timeSignatures: { ticks: number; numerator: number; denominator: number }[];
+  /** 音檔第幾秒是第 1 小節第 1 拍（tick 0）。預設 0。 */
+  offset?: number;
+}
+
+/** 純音訊節拍分析的結果。 */
+export interface RhythmInfo {
+  bpm: number;
+  confidence: number;
+  beats: number[];
+  candidates: number[];
+  offset: number;
 }
 
 /** 某個時間點在小節格上的位置。bar、beat 都從 1 起算。 */

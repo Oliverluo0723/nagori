@@ -1,7 +1,15 @@
 import { Midi } from '@tonejs/midi';
 import { expect, test } from 'vitest';
 import { makeMidi } from '../../test/fixtures/midi';
-import { bpmAt, buildTempoMap, positionAt, timeOfBar } from './tempo';
+import {
+  bpmAt,
+  buildTempoMap,
+  positionAt,
+  secondsToTicks,
+  tempoMapFromBpm,
+  ticksToSeconds,
+  timeOfBar,
+} from './tempo';
 
 test('120 bpm 4/4: t=2s is bar 2 beat 1', () => {
   const midi = new Midi(makeMidi({ bpm: 120, tracks: [] }));
@@ -26,4 +34,14 @@ test('first tempo event after tick 0: timeOfBar and positionAt agree (reviewer f
   expect(timeOfBar(map, 3)).toBeCloseTo(4.8);
   expect(positionAt(map, 4.8)).toMatchObject({ bar: 3, beat: 1 });
   expect(bpmAt(map, 0)).toBe(100);
+});
+
+test('tempoMapFromBpm with an offset puts bar 1 beat 1 at the offset', () => {
+  const map = tempoMapFromBpm(120, 0.5);
+  expect(positionAt(map, 0.5)).toMatchObject({ bar: 1, beat: 1 });
+  expect(positionAt(map, 2.5)).toMatchObject({ bar: 2, beat: 1 });
+  expect(timeOfBar(map, 2)).toBeCloseTo(2.5);
+  expect(secondsToTicks(map, 0.5)).toBeCloseTo(0);
+  expect(ticksToSeconds(map, 0)).toBeCloseTo(0.5);
+  expect(bpmAt(map, 10)).toBe(120);
 });

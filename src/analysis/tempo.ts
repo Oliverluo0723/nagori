@@ -28,11 +28,19 @@ function temposFromZero(map: TempoMap): TempoMap['tempos'] {
   return map.tempos;
 }
 
-/** 秒 → ticks，依 tempos 分段積分。 */
+/** 固定 bpm 的 tempo map；offset 是第一拍在音檔的秒數。 */
+export function tempoMapFromBpm(bpm: number, offset = 0, ppq = 480): TempoMap {
+  return { ppq, tempos: [{ ticks: 0, bpm }], timeSignatures: [], offset };
+}
+
+/** 秒 → ticks，依 tempos 分段積分。offset 之前的時間算成負 ticks。 */
 export function secondsToTicks(map: TempoMap, seconds: number): number {
   const tempos = temposFromZero(map);
+  const rel = seconds - (map.offset ?? 0);
+  if (rel < 0) return rel / secondsPerTick(tempos[0].bpm, map.ppq);
   let ticks = 0;
   let elapsed = 0;
+  seconds = rel;
   for (let i = 0; i < tempos.length; i++) {
     const cur = tempos[i];
     const next = tempos[i + 1];
@@ -48,9 +56,14 @@ export function secondsToTicks(map: TempoMap, seconds: number): number {
   return ticks;
 }
 
-/** ticks → 秒，依 tempos 分段積分。 */
+/** ticks → 秒，依 tempos 分段積分，最後加上 offset。 */
 export function ticksToSeconds(map: TempoMap, ticks: number): number {
+  return ticksToSecondsRel(map, ticks) + (map.offset ?? 0);
+}
+
+function ticksToSecondsRel(map: TempoMap, ticks: number): number {
   const tempos = temposFromZero(map);
+  if (ticks < 0) return ticks * secondsPerTick(tempos[0].bpm, map.ppq);
   let seconds = 0;
   for (let i = 0; i < tempos.length; i++) {
     const cur = tempos[i];
