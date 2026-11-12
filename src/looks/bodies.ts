@@ -266,7 +266,7 @@ function readouts(ctx: LookContext): Readout[] {
 export const bodiesLook: Look = {
   id: 'bodies',
   number: 5,
-  name: '和弦發光體',
+  name: '頻帶形體',
   listens: ['spectrum', 'drums', 'chords'],
   params,
   draw,
