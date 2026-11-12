@@ -6,7 +6,9 @@ import { themes } from '../compose/themes';
 import type { Composition } from '../compose/types';
 import { looks } from '../looks/registry';
 import type { Look } from '../looks/types';
+import { exportVideo } from '../render/exportVideo';
 import { createPreview, type Preview } from '../render/preview';
+import { type ExportLength, exportRange } from '../render/range';
 import { useProject } from './useProject';
 import './App.css';
 
@@ -59,6 +61,24 @@ const SOURCE_TEXT: Record<SourceKind, string> = {
   none: '無',
 };
 
+const LENGTHS: { id: ExportLength; name: string }[] = [
+  { id: 15, name: '15 秒' },
+  { id: 30, name: '30 秒' },
+  { id: 'full', name: '整首' },
+];
+
+type ExportState =
+  | { status: 'idle' }
+  | { status: 'running'; percent: number }
+  | { status: 'done'; url: string; fileName: string }
+  | { status: 'error'; message: string };
+
+/** 檔名：歌名-look-起點，去掉檔案系統不收的字元。 */
+function exportFileName(song: string, lookId: string, start: number): string {
+  const safe = song.replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'oto';
+  return `${safe}-${lookId}-${clock(start).replace(':', 'm')}s.mp4`;
+}
+
 const STAGE_TEXT: Record<Stage, string> = {
   decode: '解碼音檔',
   separate: '分軌（第一次約一分鐘）',
@@ -76,6 +96,10 @@ export function App() {
   const [playing, setPlaying] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [now, setNow] = useState(0);
+  const [exportLength, setExportLength] = useState<ExportLength>(15);
+  const [snap, setSnap] = useState(true);
+  const [exporting, setExporting] = useState<ExportState>({ status: 'idle' });
+  const exportAbort = useRef<AbortController | null>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const previewRef = useRef<Preview | null>(null);
@@ -161,7 +185,83 @@ export function App() {
     };
   }, []);
 
-  // 鍵盤：空白鍵播放／暫停，↑↓ 換 look
+  const duration = ready?.readings.duration ?? 0;
+  const pct = duration > 0 ? Math.min(100, (now / duration) * 100) : 0;
+  const currentLook = looks[lookId];
+
+  const range = useMemo(
+    () =>
+      tempo ? exportRange({ length: exportLength, playhead: now, snap, tempo, duration }) : null,
+    [tempo, exportLength, now, snap, duration],
+  );
+
+  const seek = useCallback(
+    (t: number) => {
+      if (!ready) return;
+      const clamped = Math.max(0, Math.min(duration, t));
+      previewRef.current?.seek(clamped);
+      setNow(clamped);
+    },
+    [ready, duration],
+  );
+
+  const scrubTo = (e: React.PointerEvent<HTMLDivElement>) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    seek(((e.clientX - box.left) / box.width) * duration);
+  };
+
+  // 換歌就收掉上一次的輸出
+  // biome-ignore lint/correctness/useExhaustiveDependencies: audioUrl 是觸發條件，effect 本身不讀它
+  useEffect(() => {
+    exportAbort.current?.abort();
+    setExporting((s) => {
+      if (s.status === 'done') URL.revokeObjectURL(s.url);
+      return { status: 'idle' };
+    });
+  }, [audioUrl]);
+
+  const runExport = async () => {
+    if (!ready || !range || exporting.status === 'running') return;
+    previewRef.current?.pause();
+    setPlaying(false);
+    if (exporting.status === 'done') URL.revokeObjectURL(exporting.url);
+    const ac = new AbortController();
+    exportAbort.current = ac;
+    setExporting({ status: 'running', percent: 0 });
+    let shown = 0;
+    try {
+      const blob = await exportVideo({
+        composition,
+        readings: ready.readings,
+        audioUrl: ready.audioUrl,
+        range,
+        signal: ac.signal,
+        onProgress: (f) => {
+          const percent = Math.floor(f * 100);
+          if (percent !== shown) {
+            shown = percent;
+            setExporting({ status: 'running', percent });
+          }
+        },
+      });
+      if (ac.signal.aborted) return;
+      const url = URL.createObjectURL(blob);
+      const fileName = exportFileName(ready.name, lookId, range.start);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      setExporting({ status: 'done', url, fileName });
+    } catch (err) {
+      if (ac.signal.aborted) {
+        setExporting({ status: 'idle' });
+        return;
+      }
+      setExporting({ status: 'error', message: err instanceof Error ? err.message : String(err) });
+    }
+  };
+
+  // 鍵盤：空白鍵播放／暫停，↑↓ 換 look，←→ 跳一小節
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
@@ -169,6 +269,10 @@ export function App() {
       if (e.code === 'Space') {
         e.preventDefault();
         void togglePlay();
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        const bar = (60 / (bpm || 120)) * 4;
+        seek(now + (e.key === 'ArrowRight' ? bar : -bar));
       } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
         const i = LOOK_LIST.findIndex((lk) => lk.id === lookId);
@@ -180,11 +284,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [togglePlay, lookId]);
-
-  const duration = ready?.readings.duration ?? 0;
-  const pct = duration > 0 ? Math.min(100, (now / duration) * 100) : 0;
-  const currentLook = looks[lookId];
+  }, [togglePlay, lookId, seek, now, bpm]);
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: 整頁是拖放區，沒有鍵盤對應的操作
@@ -320,9 +420,69 @@ export function App() {
           </details>
         )}
 
+        {ready && range && (
+          <section className="export">
+            <div className="section-label">輸出 1080×1920</div>
+            <div className="segmented">
+              {LENGTHS.map((l) => (
+                <button
+                  key={l.id}
+                  type="button"
+                  onClick={() => setExportLength(l.id)}
+                  className={l.id === exportLength ? 'on' : ''}
+                  disabled={exporting.status === 'running'}
+                >
+                  {l.name}
+                </button>
+              ))}
+            </div>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={snap}
+                onChange={(e) => setSnap(e.target.checked)}
+                disabled={exportLength === 'full' || exporting.status === 'running'}
+              />
+              起點吸附小節
+            </label>
+            <p className="export-range">
+              {clock(range.start)} – {clock(range.end)}
+              <span>・從播放線起</span>
+            </p>
+            {exporting.status === 'running' ? (
+              <div>
+                <p className="status">
+                  逐幀輸出中 {exporting.percent}%
+                  <button
+                    type="button"
+                    className="link"
+                    onClick={() => exportAbort.current?.abort()}
+                  >
+                    取消
+                  </button>
+                </p>
+                <div className="progress">
+                  <div style={{ width: `${exporting.percent}%` }} />
+                </div>
+              </div>
+            ) : (
+              <button type="button" className="export-go" onClick={runExport}>
+                輸出 mp4
+              </button>
+            )}
+            {exporting.status === 'done' && (
+              <a className="note" href={exporting.url} download={exporting.fileName}>
+                已下載 {exporting.fileName}
+              </a>
+            )}
+            {exporting.status === 'error' && <p className="error">{exporting.message}</p>}
+          </section>
+        )}
+
         <p className="hint-keys">
           <kbd>空白</kbd> 播放 <kbd>↑</kbd>
-          <kbd>↓</kbd> 換 look
+          <kbd>↓</kbd> 換 look <kbd>←</kbd>
+          <kbd>→</kbd> 跳一小節
         </p>
       </aside>
 
@@ -354,8 +514,33 @@ export function App() {
                 {clock(now)} / {clock(duration)}
               </span>
             </div>
-            <div className="progress">
-              <div style={{ width: `${pct}%` }} />
+            <div
+              className={`scrub${ready ? '' : ' off'}`}
+              role="slider"
+              tabIndex={0}
+              aria-label="播放位置"
+              aria-valuemin={0}
+              aria-valuemax={Math.round(duration)}
+              aria-valuenow={Math.round(now)}
+              onPointerDown={(e) => {
+                e.currentTarget.setPointerCapture(e.pointerId);
+                scrubTo(e);
+              }}
+              onPointerMove={(e) => {
+                if (e.currentTarget.hasPointerCapture(e.pointerId)) scrubTo(e);
+              }}
+            >
+              {range && duration > 0 && (
+                <div
+                  className="scrub-range"
+                  style={{
+                    left: `${(range.start / duration) * 100}%`,
+                    width: `${((range.end - range.start) / duration) * 100}%`,
+                  }}
+                />
+              )}
+              <div className="scrub-fill" style={{ width: `${pct}%` }} />
+              <div className="scrub-head" style={{ left: `${pct}%` }} />
             </div>
           </div>
         </div>
