@@ -20,13 +20,22 @@ function secondsPerTick(bpm: number, ppq: number): number {
   return 60 / bpm / ppq;
 }
 
+/** 第一個 tempo 事件不在 tick 0 時，前面那段沿用它的 bpm（跟 @tonejs/midi 算 note.time 的方式一致）。 */
+function temposFromZero(map: TempoMap): TempoMap['tempos'] {
+  const first = map.tempos[0];
+  if (!first) return [{ ticks: 0, bpm: 120 }];
+  if (first.ticks > 0) return [{ ticks: 0, bpm: first.bpm }, ...map.tempos];
+  return map.tempos;
+}
+
 /** 秒 → ticks，依 tempos 分段積分。 */
 export function secondsToTicks(map: TempoMap, seconds: number): number {
+  const tempos = temposFromZero(map);
   let ticks = 0;
   let elapsed = 0;
-  for (let i = 0; i < map.tempos.length; i++) {
-    const cur = map.tempos[i];
-    const next = map.tempos[i + 1];
+  for (let i = 0; i < tempos.length; i++) {
+    const cur = tempos[i];
+    const next = tempos[i + 1];
     const spt = secondsPerTick(cur.bpm, map.ppq);
     const segmentTicks = next ? next.ticks - cur.ticks : Number.POSITIVE_INFINITY;
     const segmentSeconds = segmentTicks * spt;
@@ -41,10 +50,11 @@ export function secondsToTicks(map: TempoMap, seconds: number): number {
 
 /** ticks → 秒，依 tempos 分段積分。 */
 export function ticksToSeconds(map: TempoMap, ticks: number): number {
+  const tempos = temposFromZero(map);
   let seconds = 0;
-  for (let i = 0; i < map.tempos.length; i++) {
-    const cur = map.tempos[i];
-    const next = map.tempos[i + 1];
+  for (let i = 0; i < tempos.length; i++) {
+    const cur = tempos[i];
+    const next = tempos[i + 1];
     const spt = secondsPerTick(cur.bpm, map.ppq);
     const end = next ? Math.min(next.ticks, ticks) : ticks;
     if (ticks <= cur.ticks) break;
@@ -56,8 +66,9 @@ export function ticksToSeconds(map: TempoMap, ticks: number): number {
 
 export function bpmAt(map: TempoMap, t: number): number {
   const ticks = secondsToTicks(map, t);
-  let bpm = map.tempos[0].bpm;
-  for (const tempo of map.tempos) {
+  const tempos = temposFromZero(map);
+  let bpm = tempos[0].bpm;
+  for (const tempo of tempos) {
     if (tempo.ticks <= ticks) bpm = tempo.bpm;
     else break;
   }

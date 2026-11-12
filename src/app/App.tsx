@@ -8,7 +8,7 @@ import { useProject } from './useProject';
 const PREVIEW_WIDTH = 540;
 
 const ERROR_TEXT = {
-  'need-midi': '需要同名 .mid',
+  'need-midi': '需要一起選一個 .mid（同名會自動配對）',
   'need-audio': '需要音檔',
   'parse-failed': '解析失敗',
 } as const;
@@ -34,7 +34,12 @@ export function App() {
     const host = hostRef.current;
     const audio = audioRef.current;
     if (!host || !audio) return;
-    const preview = createPreview({ host, audio, width: PREVIEW_WIDTH });
+    const preview = createPreview({
+      host,
+      audio,
+      width: PREVIEW_WIDTH,
+      onEnded: () => setPlaying(false),
+    });
     previewRef.current = preview;
     return () => {
       preview.destroy();
@@ -82,7 +87,7 @@ export function App() {
         <h1 style={styles.logo}>
           oto<span style={{ color: '#ff4a1c' }}>.</span>
         </h1>
-        <p style={styles.hint}>把 mp3 與同名 .mid 一起拖進這個視窗，或</p>
+        <p style={styles.hint}>把音檔和它的 .mid 一起拖進這個視窗，或</p>
         <input
           type="file"
           multiple

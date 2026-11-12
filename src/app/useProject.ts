@@ -19,11 +19,25 @@ function ext(file: File): string {
   return i < 0 ? '' : file.name.slice(i + 1).toLowerCase();
 }
 
+function basename(file: File): string {
+  return file.name.replace(/\.[^.]+$/, '').toLowerCase();
+}
+
+/** 同名的 .mid 優先；只有一個 .mid 時直接配；多個卻沒有同名的就不猜。 */
+function pickMidi(audio: File, midis: File[]): File | undefined {
+  const same = midis.find((m) => basename(m) === basename(audio));
+  if (same) return same;
+  return midis.length === 1 ? midis[0] : undefined;
+}
+
 /** 拖進來的檔案分流：找音檔與 .mid，分析後回傳 Readings。 */
 export async function loadDroppedFiles(files: File[], deps: LoadDeps): Promise<LoadResult> {
   const audio = files.find((f) => AUDIO_EXT.includes(ext(f)));
-  const midi = files.find((f) => MIDI_EXT.includes(ext(f)));
   if (!audio) return { ok: false, reason: 'need-audio' };
+  const midi = pickMidi(
+    audio,
+    files.filter((f) => MIDI_EXT.includes(ext(f))),
+  );
   if (!midi) return { ok: false, reason: 'need-midi' };
   try {
     const duration = await deps.getDuration(audio);

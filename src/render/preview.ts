@@ -18,6 +18,8 @@ export interface PreviewOptions {
   host: HTMLElement;
   audio: HTMLAudioElement;
   width: number;
+  /** 音檔播到底時呼叫；迴圈已經停了。 */
+  onEnded?: () => void;
 }
 
 /**
@@ -25,7 +27,7 @@ export interface PreviewOptions {
  * 跟輸出走同一個 renderFrame，只是尺寸較小。
  */
 export function createPreview(opts: PreviewOptions): Preview {
-  const { host, audio, width } = opts;
+  const { host, audio, width, onEnded } = opts;
   const height = Math.round((width * 16) / 9);
 
   const canvas = document.createElement('canvas');
@@ -47,6 +49,8 @@ export function createPreview(opts: PreviewOptions): Preview {
     p.setup = () => {
       p.noCanvas();
       p.noLoop();
+      // 固定 1 倍：glow 的 shadowBlur 不受 transform 影響，跟著 DPR 走會讓發光量隨螢幕改變
+      p.pixelDensity(1);
       surfaces = new P5SurfaceProvider(p, () =>
         composition ? (themes[composition.themeId]?.glow ?? false) : false,
       );
@@ -73,6 +77,13 @@ export function createPreview(opts: PreviewOptions): Preview {
     if (raf) cancelAnimationFrame(raf);
     raf = 0;
   };
+
+  const handleEnded = () => {
+    stopLoop();
+    drawFrame();
+    onEnded?.();
+  };
+  audio.addEventListener('ended', handleEnded);
 
   return {
     setComposition(c) {
@@ -107,6 +118,7 @@ export function createPreview(opts: PreviewOptions): Preview {
     },
     destroy() {
       stopLoop();
+      audio.removeEventListener('ended', handleEnded);
       surfaces?.destroy();
       sketch.remove();
       canvas.remove();

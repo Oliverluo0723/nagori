@@ -33,3 +33,36 @@ test('corrupt mid → parse-failed', async () => {
   );
   expect(r).toEqual({ ok: false, reason: 'parse-failed' });
 });
+
+test('prefers the .mid whose basename matches the audio', async () => {
+  const r = await loadDroppedFiles(
+    [
+      new File([''], 'a.mp3'),
+      new File([blob(makeMidi({ bpm: 90, tracks: [] }))], 'b.mid'),
+      new File([blob(makeMidi({ bpm: 140, tracks: [] }))], 'a.mid'),
+    ],
+    deps,
+  );
+  expect(r.ok).toBe(true);
+  if (r.ok) expect(r.readings.tempo.tempos[0].bpm).toBeCloseTo(140, 2);
+});
+
+test('one audio + one .mid with different names still pairs', async () => {
+  const r = await loadDroppedFiles(
+    [new File([''], 'a.mp3'), new File([blob(makeMidi({ tracks: [] }))], 'b.mid')],
+    deps,
+  );
+  expect(r.ok).toBe(true);
+});
+
+test('several .mid but none matching the audio name → need-midi', async () => {
+  const r = await loadDroppedFiles(
+    [
+      new File([''], 'a.mp3'),
+      new File([blob(makeMidi({ tracks: [] }))], 'b.mid'),
+      new File([blob(makeMidi({ tracks: [] }))], 'c.mid'),
+    ],
+    deps,
+  );
+  expect(r).toEqual({ ok: false, reason: 'need-midi' });
+});

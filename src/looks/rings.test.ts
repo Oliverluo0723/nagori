@@ -76,3 +76,17 @@ test('registry exposes rings by id', () => {
   expect(looks.rings).toBe(ringsLook);
   expect(ringsLook).toMatchObject({ id: 'rings', number: 6 });
 });
+
+test('t past every hit: axis and now line remain, no circles (review focus 5)', () => {
+  const p = new RecordingPainter();
+  ringsLook.draw(
+    p,
+    ctx(100, [
+      { time: 1, kind: 'kick', velocity: 1 },
+      { time: 2, kind: 'snare', velocity: 1 },
+    ]),
+  );
+  expect(p.ops.filter((o) => o.op === 'circle')).toHaveLength(0);
+  expect(p.ops.filter((o) => o.op === 'line')).toHaveLength(2);
+  expect(p.ops[0]).toEqual({ op: 'background', args: ['#0f0f0f'] });
+});
