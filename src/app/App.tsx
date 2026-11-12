@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { bpmAt } from '../analysis/tempo';
 import { themes } from '../compose/themes';
 import type { Composition } from '../compose/types';
+import { looks } from '../looks/registry';
 import { createPreview, type Preview } from '../render/preview';
 import { useProject } from './useProject';
 
@@ -16,6 +17,7 @@ const ERROR_TEXT = {
 export function App() {
   const { state, drop } = useProject();
   const [themeId, setThemeId] = useState<string>('darkGlow');
+  const [lookId, setLookId] = useState<string>('rings');
   const [playing, setPlaying] = useState(false);
   const hostRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -24,10 +26,10 @@ export function App() {
   const composition = useMemo<Composition>(
     () => ({
       aspect: { w: 9, h: 16 },
-      root: { kind: 'cell', id: 'c1', lookId: 'rings', params: {} },
+      root: { kind: 'cell', id: 'c1', lookId, params: {} },
       themeId,
     }),
-    [themeId],
+    [themeId, lookId],
   );
 
   useEffect(() => {
@@ -116,6 +118,21 @@ export function App() {
           <p style={styles.error}>找不到鼓軌</p>
         )}
 
+        <div style={styles.looks}>
+          {Object.values(looks)
+            .sort((a, b) => a.number - b.number)
+            .map((lk) => (
+              <button
+                key={lk.id}
+                type="button"
+                onClick={() => setLookId(lk.id)}
+                style={{ ...styles.button, ...(lk.id === lookId ? styles.buttonOn : {}) }}
+              >
+                <span style={styles.num}>{String(lk.number).padStart(2, '0')}</span> {lk.name}
+              </button>
+            ))}
+        </div>
+
         <div style={styles.row}>
           {Object.values(themes).map((th) => (
             <button
@@ -175,6 +192,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   file: { fontSize: 12, color: '#7a7a7a' },
   row: { display: 'flex', gap: 8 },
+  looks: { display: 'grid', gap: 6 },
+  num: { fontFamily: 'ui-monospace, monospace', color: '#ff4a1c', marginRight: 6 },
   button: {
     background: '#1a1a1a',
     color: '#efece4',

@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
-import { analyzeMidi } from '../analysis/analyze';
+import { analyzeMidi, withSpectrum } from '../analysis/analyze';
+import { decodeAudio } from '../analysis/audio/decode';
+import { analyzeSpectrum } from '../analysis/audio/spectrum';
 import type { Readings } from '../analysis/types';
 
 const AUDIO_EXT = ['mp3', 'wav', 'aiff', 'aif', 'flac', 'm4a', 'ogg'];
@@ -12,6 +14,8 @@ export type LoadResult =
 export interface LoadDeps {
   getDuration: (audio: File) => Promise<number>;
   createUrl?: (audio: File) => string;
+  /** 有給就解碼音檔並算頻譜；Node 測試注入合成的 pcm。 */
+  decode?: (audio: File) => Promise<{ pcm: Float32Array; sampleRate: number }>;
 }
 
 function ext(file: File): string {
@@ -41,7 +45,11 @@ export async function loadDroppedFiles(files: File[], deps: LoadDeps): Promise<L
   if (!midi) return { ok: false, reason: 'need-midi' };
   try {
     const duration = await deps.getDuration(audio);
-    const readings = analyzeMidi(await midi.arrayBuffer(), duration);
+    let readings = analyzeMidi(await midi.arrayBuffer(), duration);
+    if (deps.decode) {
+      const { pcm, sampleRate } = await deps.decode(audio);
+      readings = withSpectrum(readings, analyzeSpectrum(pcm, sampleRate));
+    }
     const createUrl = deps.createUrl ?? ((f: File) => URL.createObjectURL(f));
     return {
       ok: true,
@@ -83,7 +91,7 @@ export function useProject() {
 
   const drop = useCallback(async (files: File[]) => {
     setState({ status: 'loading' });
-    const r = await loadDroppedFiles(files, { getDuration: audioDuration });
+    const r = await loadDroppedFiles(files, { getDuration: audioDuration, decode: decodeAudio });
     if (r.ok)
       setState({ status: 'ready', readings: r.readings, audioUrl: r.audioUrl, name: r.name });
     else setState({ status: 'error', reason: r.reason });

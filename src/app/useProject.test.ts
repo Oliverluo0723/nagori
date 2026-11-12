@@ -66,3 +66,23 @@ test('several .mid but none matching the audio name → need-midi', async () => 
   );
   expect(r).toEqual({ ok: false, reason: 'need-midi' });
 });
+
+test('with a decoder, readings carry a spectrum (1 s → 50 frames)', async () => {
+  const sr = 44100;
+  const pcm = new Float32Array(sr);
+  for (let i = 0; i < sr; i++) pcm[i] = Math.sin((2 * Math.PI * 440 * i) / sr) * 0.5;
+  const r = await loadDroppedFiles(
+    [new File([''], 'song.mp3'), new File([blob(makeMidi({ tracks: [] }))], 'song.mid')],
+    { ...deps, decode: async () => ({ pcm, sampleRate: sr }) },
+  );
+  expect(r.ok).toBe(true);
+  if (r.ok) expect(r.readings.spectrum?.frameCount).toBe(50);
+});
+
+test('without a decoder, spectrum stays undefined', async () => {
+  const r = await loadDroppedFiles(
+    [new File([''], 'song.mp3'), new File([blob(makeMidi({ tracks: [] }))], 'song.mid')],
+    deps,
+  );
+  if (r.ok) expect(r.readings.spectrum).toBeUndefined();
+});
