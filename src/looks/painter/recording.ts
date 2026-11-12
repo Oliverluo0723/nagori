@@ -1,4 +1,4 @@
-import type { Painter, TextStyle } from './painter';
+import type { Painter, Point, TextStyle } from './painter';
 
 export type PaintOp = { op: keyof Painter; args: unknown[] };
 
@@ -42,5 +42,21 @@ export class RecordingPainter implements Painter {
   }
   text(s: string, x: number, y: number, style: TextStyle): void {
     this.record('text', s, x, y, style);
+  }
+  wedge(
+    cx: number,
+    cy: number,
+    rInner: number,
+    rOuter: number,
+    startRad: number,
+    endRad: number,
+  ): void {
+    this.record('wedge', cx, cy, rInner, rOuter, startRad, endRad);
+  }
+  polyline(points: Point[]): void {
+    this.record('polyline', points);
+  }
+  ellipse(cx: number, cy: number, w: number, h: number): void {
+    this.record('ellipse', cx, cy, w, h);
   }
 }

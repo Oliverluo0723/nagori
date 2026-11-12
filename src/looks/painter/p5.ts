@@ -1,5 +1,5 @@
 import type p5 from 'p5';
-import type { Painter, TextStyle } from './painter';
+import type { Painter, Point, TextStyle } from './painter';
 
 const FONTS = {
   sans: 'Inter, system-ui, sans-serif',
@@ -68,5 +68,38 @@ export class P5Painter implements Painter {
           : this.g.LEFT;
     this.g.textAlign(align, this.g.TOP);
     this.g.text(s, x, y);
+  }
+  wedge(
+    cx: number,
+    cy: number,
+    rInner: number,
+    rOuter: number,
+    startRad: number,
+    endRad: number,
+  ): void {
+    const g = this.g;
+    const steps = 24;
+    g.beginShape();
+    for (let i = 0; i <= steps; i++) {
+      const a = startRad + ((endRad - startRad) * i) / steps;
+      g.vertex(cx + Math.cos(a) * rOuter, cy + Math.sin(a) * rOuter);
+    }
+    for (let i = steps; i >= 0; i--) {
+      const a = startRad + ((endRad - startRad) * i) / steps;
+      g.vertex(cx + Math.cos(a) * rInner, cy + Math.sin(a) * rInner);
+    }
+    g.endShape(g.CLOSE);
+  }
+  polyline(points: Point[]): void {
+    const g = this.g;
+    g.push();
+    g.noFill();
+    g.beginShape();
+    for (const p of points) g.vertex(p.x, p.y);
+    g.endShape();
+    g.pop();
+  }
+  ellipse(cx: number, cy: number, w: number, h: number): void {
+    this.g.ellipse(cx, cy, w, h);
   }
 }
