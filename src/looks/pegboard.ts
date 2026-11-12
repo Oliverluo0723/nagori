@@ -185,7 +185,7 @@ function draw(p: Painter, ctx: LookContext): void {
     // 這一頁已經填到的列；上面還沒填到的列淡淡留著上一頁（像整頁從下往上重寫）
     const current = r <= k;
     const idx = current ? page * rows + r : (page - 1) * rows + r;
-    const ghost = current ? 1 : 0.38;
+    const ghost = current ? 1 : 0.3;
     const vals = data && idx >= 0 && idx <= e ? rowValues(ctx, data, idx) : null;
     for (let i = 0; i < PEG_BANDS; i++) {
       const x = x0 + cw * i + cw / 2;
@@ -207,6 +207,8 @@ function draw(p: Painter, ctx: LookContext): void {
       const d = peg * (0.55 + 0.45 * amt);
       p.fill(color, ghost);
       p.circle(x, y, d);
+      // 上一頁的殘影只留色塊，中心的點與環只畫在這一頁
+      if (!current) continue;
       if (lv === 3) {
         p.fill(theme.mute, ghost);
         p.circle(x, y, d * 0.2);
