@@ -3,6 +3,7 @@ import { expect, test } from 'vitest';
 import { makeMidi } from '../../test/fixtures/midi';
 import { buildTempoMap } from '../analysis/tempo';
 import type { Readings } from '../analysis/types';
+import { frameLayout } from './frame';
 import { layoutCells, renderFrame } from './render';
 import { RecordingSurfaceProvider } from './surface';
 import type { Composition, LayoutNode } from './types';
@@ -15,13 +16,15 @@ const single: Composition = {
   themeId: 'darkGlow',
 };
 
-test('single cell fills the target and draws with the right size', () => {
+test('single cell: the look draws inside the plot box, the frame covers the whole cell', () => {
   const surfaces = new RecordingSurfaceProvider();
   renderFrame({ composition: single, t: 0, readings, surfaces, target: { w: 540, h: 960 } });
-  const s = surfaces.surfaces.get('c1');
-  expect(s).toBeDefined();
-  expect([s?.w, s?.h]).toEqual([540, 960]);
-  expect(s?.painter.ops[0]).toEqual({ op: 'background', args: ['#0f0f0f'] });
+  const { plot } = frameLayout(540, 960, false);
+  const look = surfaces.surfaces.get('c1');
+  expect([look?.w, look?.h]).toEqual([plot.w, plot.h]);
+  expect(look?.painter.ops[0]).toEqual({ op: 'background', args: ['#0f0f0f'] });
+  const frame = surfaces.surfaces.get('c1:frame');
+  expect([frame?.w, frame?.h]).toEqual([540, 960]);
 });
 
 test('layoutCells splits a row by ratio', () => {
@@ -55,18 +58,49 @@ test('layoutCells splits a column by ratio', () => {
 });
 
 test('missing params fall back to ParamDef defaults (windowBars=2)', () => {
-  // 120 bpm 一小節 2 秒，視窗 2 小節 = 4 秒，pxPerSec = 540/4 = 135
-  // kick 在 1 秒，t = 1.5：x = 0.62*540 − 0.5*135 = 267.3
+  // 120 bpm 一小節 2 秒，視窗 2 小節 = 4 秒，pxPerSec = w/4
+  // kick 在 1 秒，t = 1.5：x = 0.62·w − 0.5·w/4 = 0.495·w（w 是繪圖框寬）
   const surfaces = new RecordingSurfaceProvider();
   const r: Readings = { ...readings, drums: [{ time: 1, kind: 'kick', velocity: 1 }] };
   renderFrame({ composition: single, t: 1.5, readings: r, surfaces, target: { w: 540, h: 960 } });
+  const { plot } = frameLayout(540, 960, false);
   const circle = surfaces.surfaces.get('c1')?.painter.ops.find((o) => o.op === 'circle');
-  expect(circle?.args[0]).toBeCloseTo(267.3, 1);
+  expect(circle?.args[0]).toBeCloseTo(0.495 * plot.w, 1);
 });
 
-test('label is padded look number plus upper-cased id', () => {
+function frameTexts(surfaces: RecordingSurfaceProvider): string[] {
+  return (surfaces.surfaces.get('c1:frame')?.painter.ops ?? [])
+    .filter((o) => o.op === 'text')
+    .map((o) => o.args[0] as string);
+}
+
+test('frame label is the padded number then the upper-cased id; the look itself gets no label', () => {
   const surfaces = new RecordingSurfaceProvider();
   renderFrame({ composition: single, t: 0, readings, surfaces, target: { w: 540, h: 960 } });
-  const text = surfaces.surfaces.get('c1')?.painter.ops.find((o) => o.op === 'text');
-  expect(text?.args[0]).toBe('06 RINGS');
+  expect(frameTexts(surfaces).slice(0, 2)).toEqual(['06', 'RINGS']);
+  const lookTexts = surfaces.surfaces.get('c1')?.painter.ops.filter((o) => o.op === 'text') ?? [];
+  expect(lookTexts.map((o) => o.args[0])).not.toContain('06 RINGS');
+});
+
+test('title is drawn only when the composition has one', () => {
+  const surfaces = new RecordingSurfaceProvider();
+  renderFrame({
+    composition: { ...single, title: 'KILL LOVE' },
+    t: 0,
+    readings,
+    surfaces,
+    target: { w: 540, h: 960 },
+  });
+  expect(frameTexts(surfaces)[0]).toBe('KILL LOVE');
+  const plain = new RecordingSurfaceProvider();
+  renderFrame({ composition: single, t: 0, readings, surfaces: plain, target: { w: 540, h: 960 } });
+  expect(frameTexts(plain)).not.toContain('KILL LOVE');
+});
+
+test('frame draws a readout row with labels and values', () => {
+  const surfaces = new RecordingSurfaceProvider();
+  renderFrame({ composition: single, t: 3, readings, surfaces, target: { w: 540, h: 960 } });
+  const texts = frameTexts(surfaces);
+  expect(texts).toContain('TEMPO');
+  expect(texts).toContain('120 BPM');
 });

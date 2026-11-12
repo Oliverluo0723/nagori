@@ -34,6 +34,8 @@ export type LayoutNode = Cell | Split;
 
 export interface Composition {
   aspect: { w: number; h: number };
+  /** 歌名；單格時畫成左上大標。 */
+  title?: string;
   root: LayoutNode;
   themeId: string;
 }
