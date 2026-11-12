@@ -7,9 +7,47 @@ const blob = (u: Uint8Array) =>
 
 const deps = { getDuration: async () => 30, createUrl: () => 'blob:x' };
 
-test('mp3 without mid → need-midi', async () => {
+const fakeAudio = async (pcm: Float32Array, sampleRate: number) => ({
+  duration: pcm.length / sampleRate,
+  tempo: { ppq: 480, tempos: [{ ticks: 0, bpm: 100 }], timeSignatures: [], offset: 0.1 },
+  drums: [{ time: 0, kind: 'kick' as const, velocity: 1 }],
+  roles: [],
+  chords: [],
+  bass: [],
+  source: {
+    tempo: 'audio' as const,
+    drums: 'audio' as const,
+    chords: 'none' as const,
+    bass: 'none' as const,
+    key: 'none' as const,
+  },
+});
+
+test('mp3 without mid → analysed from audio', async () => {
+  const r = await loadDroppedFiles([new File([''], 'song.mp3')], {
+    ...deps,
+    decode: async () => ({ pcm: new Float32Array(44100), sampleRate: 44100 }),
+    analyze: fakeAudio,
+  });
+  expect(r.ok).toBe(true);
+  if (r.ok) expect(r.readings.source?.drums).toBe('audio');
+});
+
+test('mp3 without mid and without a decoder → parse-failed', async () => {
   const r = await loadDroppedFiles([new File([''], 'song.mp3')], deps);
-  expect(r).toEqual({ ok: false, reason: 'need-midi' });
+  expect(r).toEqual({ ok: false, reason: 'parse-failed' });
+});
+
+test('audio analysis finds no beat → no-beat', async () => {
+  const r = await loadDroppedFiles([new File([''], 'song.mp3')], {
+    ...deps,
+    decode: async () => ({ pcm: new Float32Array(44100), sampleRate: 44100 }),
+    analyze: async (pcm, sr) => ({
+      ...(await fakeAudio(pcm, sr)),
+      source: { tempo: 'none', drums: 'none', chords: 'none', bass: 'none', key: 'none' },
+    }),
+  });
+  expect(r).toEqual({ ok: false, reason: 'no-beat' });
 });
 
 test('mid without audio → need-audio', async () => {
@@ -55,7 +93,7 @@ test('one audio + one .mid with different names still pairs', async () => {
   expect(r.ok).toBe(true);
 });
 
-test('several .mid but none matching the audio name → need-midi', async () => {
+test('several .mid but none matching the audio name → treated as no MIDI (parse-failed without decoder)', async () => {
   const r = await loadDroppedFiles(
     [
       new File([''], 'a.mp3'),
@@ -64,7 +102,7 @@ test('several .mid but none matching the audio name → need-midi', async () => 
     ],
     deps,
   );
-  expect(r).toEqual({ ok: false, reason: 'need-midi' });
+  expect(r).toEqual({ ok: false, reason: 'parse-failed' });
 });
 
 test('with a decoder, readings carry a spectrum (1 s → 50 frames)', async () => {

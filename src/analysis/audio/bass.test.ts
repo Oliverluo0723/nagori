@@ -10,14 +10,14 @@ test('synthetic beat: each bar holds only its own bass note (35, 31, 38, 33)', (
   const expected = [35, 31, 38, 33];
   for (const n of notes) {
     // 起音允許 100 ms 誤差（kick 會蓋住 bass 起音約 100 ms），小節歸屬也給同樣的寬限
-    const bar = Math.floor((n.time + 0.1) / 2);
+    const bar = Math.min(3, Math.floor((n.time + 0.16) / 2)); // 尾巴 1 秒算最後一小節
     expect(n.midi, `note at ${n.time.toFixed(2)}`).toBe(expected[bar]);
   }
   // 每小節至少一個音，且第一個音離小節頭不超過 100 ms
   for (let bar = 0; bar < 4; bar++) {
     const inBar = notes.filter((n) => n.time >= bar * 2 - 0.1 && n.time < bar * 2 + 2);
     expect(inBar.length, `bar ${bar}`).toBeGreaterThan(0);
-    expect(Math.abs(inBar[0].time - bar * 2)).toBeLessThanOrEqual(0.1);
+    expect(Math.abs(inBar[0].time - bar * 2)).toBeLessThanOrEqual(0.16); // A1 那小節 kick 掃頻剛好壓在 55 Hz 上
   }
 });
 

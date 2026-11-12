@@ -1,21 +1,28 @@
 import { useCallback, useState } from 'react';
 import { analyzeMidi, withSpectrum } from '../analysis/analyze';
+import { analyzeAudio, type Progress, type Stage } from '../analysis/analyzeAudio';
 import { decodeAudio } from '../analysis/audio/decode';
 import { analyzeSpectrum } from '../analysis/audio/spectrum';
+import { mergeReadings } from '../analysis/merge';
+import { tempoMapFromBpm } from '../analysis/tempo';
 import type { Readings } from '../analysis/types';
 
 const AUDIO_EXT = ['mp3', 'wav', 'aiff', 'aif', 'flac', 'm4a', 'ogg'];
 const MIDI_EXT = ['mid', 'midi'];
 
+export type LoadFailure = 'need-audio' | 'parse-failed' | 'no-beat';
 export type LoadResult =
   | { ok: true; readings: Readings; audioUrl: string; name: string }
-  | { ok: false; reason: 'need-midi' | 'need-audio' | 'parse-failed' };
+  | { ok: false; reason: LoadFailure };
 
 export interface LoadDeps {
   getDuration: (audio: File) => Promise<number>;
   createUrl?: (audio: File) => string;
-  /** 有給就解碼音檔並算頻譜；Node 測試注入合成的 pcm。 */
+  /** 有給就解碼音檔；Node 測試注入合成的 pcm。 */
   decode?: (audio: File) => Promise<{ pcm: Float32Array; sampleRate: number }>;
+  /** 純音訊分析（沒有 .mid 或 .mid 缺角色軌時用）；預設 analyzeAudio */
+  analyze?: (pcm: Float32Array, sampleRate: number, onProgress: Progress) => Promise<Readings>;
+  onProgress?: Progress;
 }
 
 function ext(file: File): string {
@@ -42,19 +49,41 @@ export async function loadDroppedFiles(files: File[], deps: LoadDeps): Promise<L
     audio,
     files.filter((f) => MIDI_EXT.includes(ext(f))),
   );
-  if (!midi) return { ok: false, reason: 'need-midi' };
+  const progress = deps.onProgress ?? (() => {});
   try {
     const duration = await deps.getDuration(audio);
-    let readings = analyzeMidi(await midi.arrayBuffer(), duration);
+    let midiReadings: Readings | undefined;
+    if (midi) midiReadings = analyzeMidi(await midi.arrayBuffer(), duration);
+
+    let audioReadings: Readings | undefined;
     if (deps.decode) {
-      // 頻譜是可選的：解不開音檔就不帶 spectrum，MIDI 的部分照常可用
+      // 音檔解不開：有 MIDI 就照常用 MIDI，沒有就失敗
       try {
+        progress('decode', 0);
         const { pcm, sampleRate } = await deps.decode(audio);
-        readings = withSpectrum(readings, analyzeSpectrum(pcm, sampleRate));
+        const needsAudio =
+          !midiReadings ||
+          midiReadings.drums.length === 0 ||
+          (midiReadings.chords?.length ?? 0) === 0 ||
+          (midiReadings.bass?.length ?? 0) === 0;
+        if (needsAudio || !midiReadings) {
+          const analyze = deps.analyze ?? analyzeAudio;
+          audioReadings = await analyze(pcm, sampleRate, progress);
+        } else {
+          audioReadings = withSpectrum(
+            { ...midiReadings, drums: [], chords: [], bass: [], key: undefined, source: undefined },
+            analyzeSpectrum(pcm, sampleRate),
+          );
+        }
       } catch (err) {
-        console.warn('audio decode failed; continuing without spectrum', err);
+        if (!midiReadings) throw err;
+        console.warn('audio decode failed; continuing with MIDI only', err);
       }
     }
+    if (!midiReadings && !audioReadings) return { ok: false, reason: 'parse-failed' };
+    if (!midiReadings && audioReadings?.source?.tempo === 'none')
+      return { ok: false, reason: 'no-beat' };
+    const readings = mergeReadings(midiReadings, audioReadings);
     const createUrl = deps.createUrl ?? ((f: File) => URL.createObjectURL(f));
     return {
       ok: true,
@@ -85,22 +114,37 @@ export function audioDuration(file: File): Promise<number> {
   });
 }
 
+/** 換 tempo map（BPM 候選或第一拍微調），其他欄位不動。 */
+export function applyTempo(readings: Readings, bpm: number, offset: number): Readings {
+  return { ...readings, tempo: tempoMapFromBpm(bpm, offset) };
+}
+
 export type ProjectState =
   | { status: 'empty' }
-  | { status: 'loading' }
-  | { status: 'error'; reason: 'need-midi' | 'need-audio' | 'parse-failed' }
+  | { status: 'analyzing'; stage: Stage; fraction: number }
+  | { status: 'error'; reason: LoadFailure }
   | { status: 'ready'; readings: Readings; audioUrl: string; name: string };
 
 export function useProject() {
   const [state, setState] = useState<ProjectState>({ status: 'empty' });
 
   const drop = useCallback(async (files: File[]) => {
-    setState({ status: 'loading' });
-    const r = await loadDroppedFiles(files, { getDuration: audioDuration, decode: decodeAudio });
+    setState({ status: 'analyzing', stage: 'decode', fraction: 0 });
+    const r = await loadDroppedFiles(files, {
+      getDuration: audioDuration,
+      decode: decodeAudio,
+      onProgress: (stage, fraction) => setState({ status: 'analyzing', stage, fraction }),
+    });
     if (r.ok)
       setState({ status: 'ready', readings: r.readings, audioUrl: r.audioUrl, name: r.name });
     else setState({ status: 'error', reason: r.reason });
   }, []);
 
-  return { state, drop };
+  const setTempo = useCallback((bpm: number, offset: number) => {
+    setState((s) =>
+      s.status === 'ready' ? { ...s, readings: applyTempo(s.readings, bpm, offset) } : s,
+    );
+  }, []);
+
+  return { state, drop, setTempo };
 }

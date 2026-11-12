@@ -34,7 +34,22 @@ export function analyzeMidi(bytes: ArrayBuffer | Uint8Array, durationHint?: numb
   const chords = extractChords(chordTracks, tempo, duration);
   const key = detectKey(midi.header, chords);
 
-  return { duration, tempo, drums, roles, chords, bass, key };
+  return {
+    duration,
+    tempo,
+    drums,
+    roles,
+    chords,
+    bass,
+    key,
+    source: {
+      tempo: 'midi',
+      drums: drums.length ? 'midi' : 'none',
+      chords: chords.length ? 'midi' : 'none',
+      bass: bass.length ? 'midi' : 'none',
+      key: key ? 'midi' : 'none',
+    },
+  };
 }
 
 export function withSpectrum(r: Readings, spectrum: Spectrum): Readings {

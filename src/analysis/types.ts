@@ -83,4 +83,17 @@ export interface Readings {
   chords?: ChordEvent[];
   bass?: BassNote[];
   key?: KeyInfo;
+  /** 純音訊節拍分析的結果（有的話），給 BPM 候選與第一拍微調用 */
+  rhythm?: RhythmInfo;
+  /** 每個欄位是哪裡來的 */
+  source?: ReadingsSource;
+}
+
+export type SourceKind = 'midi' | 'audio' | 'none';
+export interface ReadingsSource {
+  tempo: SourceKind;
+  drums: SourceKind;
+  chords: SourceKind;
+  bass: SourceKind;
+  key: SourceKind;
 }
