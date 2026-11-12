@@ -18,8 +18,15 @@ export type LoadResult =
 export interface LoadDeps {
   getDuration: (audio: File) => Promise<number>;
   createUrl?: (audio: File) => string;
-  /** 有給就解碼音檔；Node 測試注入合成的 pcm。 */
-  decode?: (audio: File) => Promise<{ pcm: Float32Array; sampleRate: number }>;
+  /** 有給就解碼音檔；Node 測試注入合成的 pcm（left/right 可省，省了就拿 pcm 當左右）。 */
+  decode?: (
+    audio: File,
+  ) => Promise<{
+    pcm: Float32Array;
+    sampleRate: number;
+    left?: Float32Array;
+    right?: Float32Array;
+  }>;
   /** 純音訊分析（沒有 .mid 或 .mid 缺角色軌時用）；預設 analyzeAudio */
   analyze?: (pcm: Float32Array, sampleRate: number, onProgress: Progress) => Promise<Readings>;
   onProgress?: Progress;

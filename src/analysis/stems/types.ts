@@ -12,7 +12,8 @@ export interface Stems {
 
 /** 長度不一致或 sampleRate 不是 44 100 就丟錯 */
 export function assertStems(s: Stems): void {
-  if (s.sampleRate !== 44100) throw new Error(`stems: sampleRate must be 44100, got ${s.sampleRate}`);
+  if (s.sampleRate !== 44100)
+    throw new Error(`stems: sampleRate must be 44100, got ${s.sampleRate}`);
   const len = s[STEM_NAMES[0]].length;
   for (const name of STEM_NAMES) {
     if (s[name].length !== len)
