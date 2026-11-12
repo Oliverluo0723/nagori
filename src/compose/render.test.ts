@@ -4,7 +4,7 @@ import { makeMidi } from '../../test/fixtures/midi';
 import { buildTempoMap } from '../analysis/tempo';
 import type { Readings } from '../analysis/types';
 import { frameLayout } from './frame';
-import { layoutCells, renderFrame } from './render';
+import { contentBox, DEFAULT_CANVAS, layoutCells, renderFrame } from './render';
 import { RecordingSurfaceProvider } from './surface';
 import type { Composition, LayoutNode } from './types';
 
@@ -103,4 +103,32 @@ test('frame draws a readout row with labels and values', () => {
   const texts = frameTexts(surfaces);
   expect(texts).toContain('TEMPO');
   expect(texts).toContain('120 BPM');
+});
+
+test('canvas style: cells sit inside the safe area and the footer shows the time', () => {
+  const surfaces = new RecordingSurfaceProvider();
+  const composition: Composition = {
+    ...single,
+    canvas: { ...DEFAULT_CANVAS, signature: '@me' },
+    root: {
+      kind: 'split',
+      id: 's1',
+      direction: 'row',
+      ratio: 0.5,
+      a: { kind: 'cell', id: 'c1', lookId: 'rings', params: {} },
+      b: { kind: 'cell', id: 'c2', lookId: 'rings', params: {} },
+    },
+  };
+  renderFrame({ composition, t: 75, readings, surfaces, target: { w: 1080, h: 1920 } });
+  const { box, gap } = contentBox(composition, 1080, 1920);
+  expect(box).toEqual({ x: 54, y: 202, w: 972, h: 1392 });
+  const half = (box.w - gap) / 2;
+  expect([surfaces.surfaces.get('c1:frame')?.w, surfaces.surfaces.get('c2:frame')?.w]).toEqual([
+    half,
+    half,
+  ]);
+  const footer = surfaces.surfaces.get('canvas:footer');
+  expect(footer?.h).toBe(1920 - 1594);
+  const texts = footer?.painter.ops.filter((o) => o.op === 'text').map((o) => o.args[0]);
+  expect(texts).toEqual(['1:15 / 1:00', '@me']);
 });

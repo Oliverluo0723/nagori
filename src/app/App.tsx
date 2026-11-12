@@ -2,8 +2,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Stage } from '../analysis/analyzeAudio';
 import { bpmAt } from '../analysis/tempo';
 import type { SourceKind } from '../analysis/types';
+import {
+  cellsOf,
+  findCell,
+  layoutTree,
+  PRESETS,
+  ratioAt,
+  removeCell,
+  setCellLook,
+  setRatio,
+  splitCell,
+} from '../compose/layout';
+import { contentBox, DEFAULT_CANVAS } from '../compose/render';
 import { themes } from '../compose/themes';
-import type { Composition } from '../compose/types';
+import type { Composition, LayoutNode, Split } from '../compose/types';
 import { looks } from '../looks/registry';
 import type { Look } from '../looks/types';
 import { exportVideo } from '../render/exportVideo';
@@ -13,6 +25,7 @@ import { useProject } from './useProject';
 import './App.css';
 
 const PREVIEW_WIDTH = 540;
+const PREVIEW_HEIGHT = Math.round((PREVIEW_WIDTH * 16) / 9);
 
 type LookGroupId = 'drums' | 'bass' | 'chords' | 'spectrum' | 'mix';
 
@@ -92,7 +105,16 @@ const STAGE_TEXT: Record<Stage, string> = {
 export function App() {
   const { state, drop, setTempo } = useProject();
   const [themeId, setThemeId] = useState<string>('darkGlow');
-  const [lookId, setLookId] = useState<string>('rings');
+  const [root, setRoot] = useState<LayoutNode>(() => PRESETS[0].build());
+  const [selectedId, setSelectedId] = useState('c1');
+  const [framed, setFramed] = useState(true);
+  const [signature, setSignature] = useState(DEFAULT_CANVAS.signature);
+  const selectedCell = findCell(root, selectedId) ?? cellsOf(root)[0];
+  const lookId = selectedCell.lookId;
+  const setLookId = useCallback(
+    (id: string) => setRoot((r) => setCellLook(r, selectedCell.id, id)),
+    [selectedCell.id],
+  );
   const [playing, setPlaying] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [now, setNow] = useState(0);
@@ -108,11 +130,12 @@ export function App() {
   const composition = useMemo<Composition>(
     () => ({
       aspect: { w: 9, h: 16 },
-      root: { kind: 'cell', id: 'c1', lookId, params: {} },
+      root,
       themeId,
       title: songTitle,
+      canvas: framed ? { ...DEFAULT_CANVAS, signature } : undefined,
     }),
-    [themeId, lookId, songTitle],
+    [themeId, root, songTitle, framed, signature],
   );
 
   useEffect(() => {
@@ -248,7 +271,11 @@ export function App() {
       });
       if (ac.signal.aborted) return;
       const url = URL.createObjectURL(blob);
-      const fileName = exportFileName(ready.name, lookId, range.start);
+      const fileName = exportFileName(
+        ready.name,
+        root.kind === 'cell' ? lookId : 'reel',
+        range.start,
+      );
       const a = document.createElement('a');
       a.href = url;
       a.download = fileName;
@@ -261,6 +288,26 @@ export function App() {
       }
       setExporting({ status: 'error', message: err instanceof Error ? err.message : String(err) });
     }
+  };
+
+  // 拼版：預覽座標（540×960）下的格子與切線，蓋在畫布上給人點、拖
+  const edit = useMemo(() => {
+    const { box, gap } = contentBox(composition, PREVIEW_WIDTH, PREVIEW_HEIGHT);
+    return { ...layoutTree(composition.root, box, gap), gap };
+  }, [composition]);
+  const multi = root.kind === 'split';
+  const pctX = (v: number) => `${(v / PREVIEW_WIDTH) * 100}%`;
+  const pctY = (v: number) => `${(v / PREVIEW_HEIGHT) * 100}%`;
+
+  const split = (direction: Split['direction']) => {
+    const r = splitCell(root, selectedCell.id, direction);
+    setRoot(r.root);
+    setSelectedId(r.newCellId);
+  };
+  const remove = () => {
+    const next = removeCell(root, selectedCell.id);
+    setRoot(next);
+    setSelectedId(cellsOf(next)[0].id);
   };
 
   // 鍵盤：空白鍵播放／暫停，↑↓ 換 look，←→ 跳一小節
@@ -286,7 +333,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [togglePlay, lookId, seek, now, bpm]);
+  }, [togglePlay, lookId, setLookId, seek, now, bpm]);
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: 整頁是拖放區，沒有鍵盤對應的操作
@@ -422,6 +469,50 @@ export function App() {
           </details>
         )}
 
+        <section className="compose">
+          <div className="section-label">拼版</div>
+          <div className="chips">
+            {PRESETS.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className="chip"
+                onClick={() => {
+                  setRoot(p.build());
+                  setSelectedId('c1');
+                }}
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
+          <p className="compose-sel">
+            選中 <b>{selectedCell.id}</b>・{String(looks[lookId]?.number ?? 0).padStart(2, '0')}{' '}
+            {looks[lookId]?.name}
+          </p>
+          <div className="chips">
+            <button type="button" className="chip" onClick={() => split('row')}>
+              ┃ 左右切
+            </button>
+            <button type="button" className="chip" onClick={() => split('column')}>
+              ━ 上下切
+            </button>
+            <button type="button" className="chip" onClick={remove} disabled={!multi}>
+              刪這格
+            </button>
+          </div>
+          <label className="check">
+            <input type="checkbox" checked={framed} onChange={(e) => setFramed(e.target.checked)} />
+            安全區與底欄
+          </label>
+          {framed && (
+            <label className="field">
+              簽名
+              <input value={signature} onChange={(e) => setSignature(e.target.value)} />
+            </label>
+          )}
+        </section>
+
         {ready && range && (
           <section className="export">
             <div className="section-label">輸出 1080×1920</div>
@@ -490,7 +581,46 @@ export function App() {
 
       <main className="stage">
         <div className="frame">
-          <div ref={hostRef} className="canvas-host" />
+          <div className="canvas-host">
+            <div ref={hostRef} className="canvas-mount" />
+            <div className="overlay">
+              {multi &&
+                edit.cells.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    aria-label={`選 ${c.id}`}
+                    className={`cell-hit${c.id === selectedCell.id ? ' on' : ''}`}
+                    style={{ left: pctX(c.x), top: pctY(c.y), width: pctX(c.w), height: pctY(c.h) }}
+                    onClick={() => setSelectedId(c.id)}
+                  />
+                ))}
+              {edit.dividers.map((d) => {
+                const row = d.direction === 'row';
+                const style = row
+                  ? { left: pctX(d.box.x + d.at), top: pctY(d.box.y), height: pctY(d.box.h) }
+                  : { top: pctY(d.box.y + d.at), left: pctX(d.box.x), width: pctX(d.box.w) };
+                return (
+                  <div
+                    key={d.splitId}
+                    className={`divider ${row ? 'divider--row' : 'divider--column'}`}
+                    style={style}
+                    onPointerDown={(e) => e.currentTarget.setPointerCapture(e.pointerId)}
+                    onPointerMove={(e) => {
+                      if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+                      const host = e.currentTarget.parentElement?.getBoundingClientRect();
+                      if (!host) return;
+                      const pointer = {
+                        x: ((e.clientX - host.left) / host.width) * PREVIEW_WIDTH,
+                        y: ((e.clientY - host.top) / host.height) * PREVIEW_HEIGHT,
+                      };
+                      setRoot((r) => setRatio(r, d.splitId, ratioAt(d, pointer, edit.gap)));
+                    }}
+                  />
+                );
+              })}
+            </div>
+          </div>
         </div>
         <div className="transport">
           <button

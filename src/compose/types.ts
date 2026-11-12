@@ -29,11 +29,27 @@ export interface Split {
   b: LayoutNode;
 }
 
-/** 畫布的切格樹。本里程碑只會出現 Cell。 */
+/** 畫布的切格樹。 */
 export type LayoutNode = Cell | Split;
+
+/**
+ * 整張畫布的版面（參考 Reel 量的）：四周安全區、格距、底部資訊列。
+ * padX、gap 以畫布寬為 1；padTop、padBottom 以畫布高為 1。
+ */
+export interface CanvasStyle {
+  padX: number;
+  padTop: number;
+  padBottom: number;
+  gap: number;
+  /** 底部資訊列：進度線、時間、簽名 */
+  footer: boolean;
+  signature: string;
+}
 
 export interface Composition {
   aspect: { w: number; h: number };
+  /** 沒給就整張滿版、沒有底欄（舊行為） */
+  canvas?: CanvasStyle;
   /** 歌名；單格時畫成左上大標。 */
   title?: string;
   root: LayoutNode;

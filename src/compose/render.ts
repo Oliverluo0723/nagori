@@ -2,10 +2,12 @@ import type { Readings } from '../analysis/types';
 import { readoutsFor } from '../looks/readouts';
 import { looks } from '../looks/registry';
 import type { Look, LookContext } from '../looks/types';
+import { drawFooter } from './footer';
 import { drawFrame, frameLayout } from './frame';
+import { type Box, findCell, layoutTree } from './layout';
 import type { SurfaceProvider } from './surface';
 import { themes } from './themes';
-import type { Cell, Composition, LayoutNode } from './types';
+import type { CanvasStyle, Composition, LayoutNode } from './types';
 
 export interface CellRect {
   id: string;
@@ -16,30 +18,33 @@ export interface CellRect {
 }
 
 /** 把切格樹攤平成每格的矩形。Cell → 全幅；Split 依 direction 與 ratio 遞迴。 */
-export function layoutCells(root: LayoutNode, w: number, h: number): CellRect[] {
-  const out: CellRect[] = [];
-  const walk = (node: LayoutNode, x: number, y: number, nw: number, nh: number) => {
-    if (node.kind === 'cell') {
-      out.push({ id: node.id, x, y, w: nw, h: nh });
-      return;
-    }
-    if (node.direction === 'row') {
-      const aw = nw * node.ratio;
-      walk(node.a, x, y, aw, nh);
-      walk(node.b, x + aw, y, nw - aw, nh);
-    } else {
-      const ah = nh * node.ratio;
-      walk(node.a, x, y, nw, ah);
-      walk(node.b, x, y + ah, nw, nh - ah);
-    }
-  };
-  walk(root, 0, 0, w, h);
-  return out;
+export function layoutCells(root: LayoutNode, w: number, h: number, gap = 0): CellRect[] {
+  return layoutTree(root, { x: 0, y: 0, w, h }, gap).cells;
 }
 
-function findCell(root: LayoutNode, id: string): Cell | undefined {
-  if (root.kind === 'cell') return root.id === id ? root : undefined;
-  return findCell(root.a, id) ?? findCell(root.b, id);
+export const DEFAULT_CANVAS: CanvasStyle = {
+  padX: 0.05,
+  padTop: 0.105,
+  padBottom: 0.17,
+  gap: 0.03,
+  footer: true,
+  signature: 'oto',
+};
+
+/** 格子區與格距（px）。沒有 canvas 設定就是整張、零間距。 */
+export function contentBox(
+  composition: Composition,
+  w: number,
+  h: number,
+): { box: Box; gap: number } {
+  const c = composition.canvas;
+  if (!c) return { box: { x: 0, y: 0, w, h }, gap: 0 };
+  const x = Math.round(c.padX * w);
+  const y = Math.round(c.padTop * h);
+  return {
+    box: { x, y, w: w - 2 * x, h: Math.round(h * (1 - c.padBottom)) - y },
+    gap: Math.round(c.gap * w),
+  };
 }
 
 function hashString(s: string): number {
@@ -76,7 +81,12 @@ export function renderFrame(opts: RenderFrameOptions): void {
   if (!theme) throw new Error(`unknown theme: ${composition.themeId}`);
 
   const withTitle = composition.root.kind === 'cell' && !!composition.title;
-  for (const rect of layoutCells(composition.root, target.w, target.h)) {
+  const { box, gap } = contentBox(composition, target.w, target.h);
+  if (target.ctx && composition.canvas) {
+    target.ctx.fillStyle = theme.paper;
+    target.ctx.fillRect(0, 0, target.w, target.h);
+  }
+  for (const rect of layoutTree(composition.root, box, gap).cells) {
     const cell = findCell(composition.root, rect.id);
     if (!cell) continue;
     const look = looks[cell.lookId];
@@ -109,6 +119,25 @@ export function renderFrame(opts: RenderFrameOptions): void {
     if (target.ctx && frame.image && surface.image) {
       target.ctx.drawImage(frame.image, rect.x, rect.y, rect.w, rect.h);
       target.ctx.drawImage(surface.image, rect.x + plot.x, rect.y + plot.y, plot.w, plot.h);
+    }
+  }
+
+  const canvas = composition.canvas;
+  if (canvas?.footer) {
+    const top = box.y + box.h;
+    const strip = surfaces.get('canvas:footer', target.w, target.h - top);
+    drawFooter(strip.painter, {
+      w: target.w,
+      h: target.h - top,
+      canvasW: target.w,
+      padX: box.x,
+      theme,
+      t,
+      duration: readings.duration,
+      signature: canvas.signature,
+    });
+    if (target.ctx && strip.image) {
+      target.ctx.drawImage(strip.image, 0, top, target.w, target.h - top);
     }
   }
 }
