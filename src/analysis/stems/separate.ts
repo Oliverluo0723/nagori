@@ -53,8 +53,19 @@ async function createDemucsProcessor(
   const { DemucsProcessor } = await import('demucs-web');
   ort.env.wasm.wasmPaths = { mjs: ORT_MJS.href, wasm: ORT_WASM.href };
   ort.env.wasm.numThreads = globalThis.navigator?.hardwareConcurrency || 4;
+  // demucs-web 寫死 executionProviders: ['webgpu', 'wasm']。有 WebGPU 的 Chrome 會走 GPU，
+  // 實測（M 系列 Mac、Chrome 157）卡在 0% 超過一分鐘；WASM 一首 2:18 的歌 23 秒。所以只給 wasm。
+  const wasmOnly = {
+    ...ort,
+    InferenceSession: {
+      create: (
+        model: Uint8Array,
+        options?: import('onnxruntime-web').InferenceSession.SessionOptions,
+      ) => ort.InferenceSession.create(model, { ...options, executionProviders: ['wasm'] }),
+    },
+  };
   return new DemucsProcessor({
-    ort,
+    ort: wasmOnly,
     onProgress: ({ progress }: { progress: number }) => onProgress(progress),
   }) as unknown as StemProcessor;
 }

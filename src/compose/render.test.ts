@@ -6,7 +6,7 @@ import type { Readings } from '../analysis/types';
 import { frameLayout } from './frame';
 import { contentBox, DEFAULT_CANVAS, layoutCells, renderFrame } from './render';
 import { RecordingSurfaceProvider } from './surface';
-import type { Composition, LayoutNode } from './types';
+import type { Cell, Composition, LayoutNode } from './types';
 
 const tempo = buildTempoMap(new Midi(makeMidi({ bpm: 120, tracks: [] })).header);
 const readings: Readings = { duration: 60, tempo, drums: [], roles: [] };
@@ -131,4 +131,24 @@ test('canvas style: cells sit inside the safe area and the footer shows the time
   expect(footer?.h).toBe(1920 - 1594);
   const texts = footer?.painter.ops.filter((o) => o.op === 'text').map((o) => o.args[0]);
   expect(texts).toEqual(['1:15 / 1:00', '@me']);
+});
+
+test('video cell: video only skips the look; look on top draws with a cleared background', () => {
+  const layer = { clipId: 'v1', start: 0, alignX: 0.5, alignY: 0.5, mirror: false };
+  const only: Composition = {
+    ...single,
+    root: { ...(single.root as Cell), video: { ...layer, lookOnTop: false } },
+  };
+  const s1 = new RecordingSurfaceProvider();
+  renderFrame({ composition: only, t: 0, readings, surfaces: s1, target: { w: 540, h: 960 } });
+  expect(s1.surfaces.has('c1')).toBe(false);
+
+  const over: Composition = {
+    ...single,
+    root: { ...(single.root as Cell), video: { ...layer, lookOnTop: true } },
+  };
+  const s2 = new RecordingSurfaceProvider();
+  renderFrame({ composition: over, t: 0, readings, surfaces: s2, target: { w: 540, h: 960 } });
+  expect(s2.surfaces.get('c1')?.painter.ops[0]).toEqual({ op: 'clear', args: [] });
+  expect(s2.surfaces.get('c1:frame')?.painter.ops[0]).toEqual({ op: 'clear', args: [] });
 });

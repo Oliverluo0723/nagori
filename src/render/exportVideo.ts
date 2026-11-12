@@ -15,6 +15,7 @@ import { P5SurfaceProvider } from '../compose/surface-p5';
 import { themes } from '../compose/themes';
 import type { Composition } from '../compose/types';
 import { type ExportRange, frameCount, frameTime } from './range';
+import { type ClipFiles, ExportVideos } from './videoExport';
 
 export const EXPORT_WIDTH = 1080;
 export const EXPORT_HEIGHT = 1920;
@@ -27,6 +28,8 @@ export interface ExportOptions {
   /** 那首歌的 blob URL（預覽 <audio> 用的同一個） */
   audioUrl: string;
   range: ExportRange;
+  /** 影片格用到的檔案（clipId → 檔案） */
+  clips?: ClipFiles;
   fps?: number;
   /** 0..1 */
   onProgress?: (fraction: number) => void;
@@ -98,6 +101,9 @@ export async function exportVideo(opts: ExportOptions): Promise<Blob> {
   const audio = await sliceAudio(audioUrl, range);
   const sketch = await createSketch();
   const surfaces = new P5SurfaceProvider(sketch, () => themes[composition.themeId]?.glow ?? false);
+  const n = frameCount(range, fps);
+  const times = Array.from({ length: n }, (_, i) => frameTime(range, fps, i));
+  const videos = await ExportVideos.open(composition.root, opts.clips ?? {}, times);
 
   const output = new Output({
     format: new Mp4OutputFormat({ fastStart: 'in-memory' }),
@@ -113,15 +119,16 @@ export async function exportVideo(opts: ExportOptions): Promise<Blob> {
     await sound.add(audio);
     sound.close();
 
-    const n = frameCount(range, fps);
     for (let i = 0; i < n; i++) {
       if (signal?.aborted) throw abortError();
+      await videos.advance();
       renderFrame({
         composition,
-        t: frameTime(range, fps, i),
+        t: times[i],
         readings,
         surfaces,
         target: { w, h, ctx },
+        videos,
       });
       await video.add(i / fps, 1 / fps);
       progress((i + 1) / n);
@@ -132,6 +139,7 @@ export async function exportVideo(opts: ExportOptions): Promise<Blob> {
     if (output.state !== 'finalized') await output.cancel().catch(() => {});
     throw err;
   } finally {
+    await videos.close();
     surfaces.destroy();
     sketch.remove();
   }

@@ -4,10 +4,13 @@ import { renderFrame } from '../compose/render';
 import { P5SurfaceProvider } from '../compose/surface-p5';
 import { themes } from '../compose/themes';
 import type { Composition } from '../compose/types';
+import { type ClipUrls, PreviewVideos } from './videoPreview';
 
 export interface Preview {
   setComposition(c: Composition): void;
   setReadings(r: Readings): void;
+  /** 影片清單（clipId → blob URL） */
+  setClips(urls: ClipUrls): void;
   play(): Promise<void>;
   pause(): void;
   seek(t: number): void;
@@ -52,6 +55,10 @@ export function createPreview(opts: PreviewOptions): Preview {
   let readings: Readings | null = null;
   let raf = 0;
   let surfaces: P5SurfaceProvider | null = null;
+  // 暫停中影片 seek 完要補畫一次；播放中迴圈自己會畫
+  const videos = new PreviewVideos(() => {
+    if (!raf) drawFrame();
+  });
 
   // instance mode 的 p5 只拿來 createGraphics，自己不畫。
   const sketch = new p5((p: p5) => {
@@ -69,12 +76,15 @@ export function createPreview(opts: PreviewOptions): Preview {
   const drawFrame = () => {
     if (!composition || !readings || !surfaces) return;
     const t0 = performance.now();
+    const t = audio.currentTime;
+    videos.sync(composition.root, t, raf !== 0 && !audio.paused);
     renderFrame({
       composition,
-      t: audio.currentTime,
+      t,
       readings,
       surfaces,
       target: { w: width, h: height, ctx },
+      videos,
     });
     if (import.meta.env.DEV) recordFrameMs(performance.now() - t0);
   };
@@ -91,6 +101,7 @@ export function createPreview(opts: PreviewOptions): Preview {
 
   const handleEnded = () => {
     stopLoop();
+    videos.pauseAll();
     drawFrame();
     onEnded?.();
   };
@@ -113,6 +124,10 @@ export function createPreview(opts: PreviewOptions): Preview {
       readings = r;
       drawFrame();
     },
+    setClips(urls) {
+      videos.setClips(urls);
+      drawFrame();
+    },
     async play() {
       await audio.play();
       stopLoop();
@@ -121,6 +136,7 @@ export function createPreview(opts: PreviewOptions): Preview {
     pause() {
       audio.pause();
       stopLoop();
+      videos.pauseAll();
       drawFrame();
     },
     seek(t) {
@@ -131,6 +147,7 @@ export function createPreview(opts: PreviewOptions): Preview {
       stopLoop();
       audio.removeEventListener('ended', handleEnded);
       surfaces?.destroy();
+      videos.destroy();
       sketch.remove();
       canvas.remove();
     },

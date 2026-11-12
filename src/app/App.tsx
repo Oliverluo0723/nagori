@@ -10,17 +10,20 @@ import {
   ratioAt,
   removeCell,
   setCellLook,
+  setCellVideo,
   setRatio,
   splitCell,
 } from '../compose/layout';
 import { contentBox, DEFAULT_CANVAS } from '../compose/render';
 import { themes } from '../compose/themes';
-import type { Composition, LayoutNode, Split } from '../compose/types';
+import type { Composition, LayoutNode, Split, VideoLayer } from '../compose/types';
+import { dragAlign, newVideoLayer } from '../compose/video';
 import { looks } from '../looks/registry';
 import type { Look } from '../looks/types';
 import { exportVideo } from '../render/exportVideo';
 import { createPreview, type Preview } from '../render/preview';
 import { type ExportLength, exportRange } from '../render/range';
+import { type Clip, isVideoFile, loadClip } from './clips';
 import { useProject } from './useProject';
 import './App.css';
 
@@ -111,6 +114,33 @@ export function App() {
   const [signature, setSignature] = useState(DEFAULT_CANVAS.signature);
   const selectedCell = findCell(root, selectedId) ?? cellsOf(root)[0];
   const lookId = selectedCell.lookId;
+  const [clips, setClips] = useState<Record<string, Clip>>({});
+  const [clipError, setClipError] = useState<string | null>(null);
+  const selectedVideo = selectedCell.video;
+  const selectedClip = selectedVideo ? clips[selectedVideo.clipId] : undefined;
+  const patchVideo = useCallback(
+    (cellId: string, patch: Partial<VideoLayer>) =>
+      setRoot((r) => {
+        const v = findCell(r, cellId)?.video;
+        return v ? setCellVideo(r, cellId, { ...v, ...patch }) : r;
+      }),
+    [],
+  );
+  /** 影片放進一格：新影片從歌的 0 秒開始；換影片沿用原本的起點與設定。 */
+  const putVideo = useCallback(async (cellId: string, file: File) => {
+    setClipError(null);
+    try {
+      const clip = await loadClip(file);
+      setClips((cs) => ({ ...cs, [clip.id]: clip }));
+      setRoot((r) => {
+        const old = findCell(r, cellId)?.video;
+        return setCellVideo(r, cellId, old ? { ...old, clipId: clip.id } : newVideoLayer(clip.id));
+      });
+      setSelectedId(cellId);
+    } catch {
+      setClipError(`讀不了 ${file.name}（Chrome 要能播才行）`);
+    }
+  }, []);
   const setLookId = useCallback(
     (id: string) => setRoot((r) => setCellLook(r, selectedCell.id, id)),
     [selectedCell.id],
@@ -164,6 +194,12 @@ export function App() {
   useEffect(() => {
     previewRef.current?.setComposition(composition);
   }, [composition]);
+
+  useEffect(() => {
+    previewRef.current?.setClips(
+      Object.fromEntries(Object.values(clips).map((c) => [c.id, c.url])),
+    );
+  }, [clips]);
 
   const audioUrl = state.status === 'ready' ? state.audioUrl : null;
   useEffect(() => {
@@ -260,6 +296,7 @@ export function App() {
         readings: ready.readings,
         audioUrl: ready.audioUrl,
         range,
+        clips: Object.fromEntries(Object.values(clips).map((c) => [c.id, c.file])),
         signal: ac.signal,
         onProgress: (f) => {
           const percent = Math.floor(f * 100);
@@ -296,6 +333,17 @@ export function App() {
     return { ...layoutTree(composition.root, box, gap), gap };
   }, [composition]);
   const multi = root.kind === 'split';
+  const overlayRef = useRef<HTMLDivElement>(null);
+  /** 螢幕座標落在哪一格（拖影片進來時用）；不在畫布上回 undefined。 */
+  const cellAt = (clientX: number, clientY: number): string | undefined => {
+    const host = overlayRef.current?.getBoundingClientRect();
+    if (!host) return undefined;
+    const x = ((clientX - host.left) / host.width) * PREVIEW_WIDTH;
+    const y = ((clientY - host.top) / host.height) * PREVIEW_HEIGHT;
+    return edit.cells.find((c) => x >= c.x && x < c.x + c.w && y >= c.y && y < c.y + c.h)?.id;
+  };
+  /** 在選中的影片格上拖：移動 cover 裁切的對齊點。 */
+  const alignDrag = useRef<{ x: number; y: number; ax: number; ay: number } | null>(null);
   const pctX = (v: number) => `${(v / PREVIEW_WIDTH) * 100}%`;
   const pctY = (v: number) => `${(v / PREVIEW_HEIGHT) * 100}%`;
 
@@ -349,7 +397,11 @@ export function App() {
       onDrop={(e) => {
         e.preventDefault();
         setDragging(false);
-        drop(Array.from(e.dataTransfer.files));
+        const files = Array.from(e.dataTransfer.files);
+        const video = files.find(isVideoFile);
+        if (video) void putVideo(cellAt(e.clientX, e.clientY) ?? selectedCell.id, video);
+        const rest = files.filter((f) => !isVideoFile(f));
+        if (rest.length > 0) drop(rest);
       }}
     >
       <aside className="panel panel--left">
@@ -487,8 +539,10 @@ export function App() {
             ))}
           </div>
           <p className="compose-sel">
-            選中 <b>{selectedCell.id}</b>・{String(looks[lookId]?.number ?? 0).padStart(2, '0')}{' '}
-            {looks[lookId]?.name}
+            選中 <b>{selectedCell.id}</b>・
+            {selectedVideo && !selectedVideo.lookOnTop
+              ? '影片'
+              : `${selectedVideo ? '影片＋' : ''}${String(looks[lookId]?.number ?? 0).padStart(2, '0')} ${looks[lookId]?.name ?? ''}`}
           </p>
           <div className="chips">
             <button type="button" className="chip" onClick={() => split('row')}>
@@ -501,6 +555,81 @@ export function App() {
               刪這格
             </button>
           </div>
+          <div className="video-box">
+            <label className="chip file-chip">
+              {selectedVideo ? '換影片' : '＋ 放影片'}
+              <input
+                type="file"
+                accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void putVideo(selectedCell.id, f);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+            {selectedVideo && (
+              <button
+                type="button"
+                className="chip"
+                onClick={() => setRoot((r) => setCellVideo(r, selectedCell.id, undefined))}
+              >
+                拿掉影片
+              </button>
+            )}
+          </div>
+          {clipError && <p className="error">{clipError}</p>}
+          {selectedVideo && (
+            <div className="video-opts">
+              <p className="note">
+                {selectedClip?.name ?? '影片遺失'}・{clock(selectedClip?.duration ?? 0)}
+                ・拖畫面調位置
+              </p>
+              <label className="field">
+                歌的第幾秒開始播
+                <input
+                  type="number"
+                  step={0.1}
+                  value={Math.round(selectedVideo.start * 100) / 100}
+                  onChange={(e) =>
+                    patchVideo(selectedCell.id, { start: Number(e.target.value) || 0 })
+                  }
+                />
+              </label>
+              <div className="chips">
+                <button
+                  type="button"
+                  className="chip"
+                  onClick={() => patchVideo(selectedCell.id, { start: now })}
+                >
+                  從播放線開始
+                </button>
+                <button
+                  type="button"
+                  className="chip"
+                  onClick={() => patchVideo(selectedCell.id, { alignX: 0.5, alignY: 0.5 })}
+                >
+                  置中
+                </button>
+              </div>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={selectedVideo.lookOnTop}
+                  onChange={(e) => patchVideo(selectedCell.id, { lookOnTop: e.target.checked })}
+                />
+                上面疊 look（去背）
+              </label>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={selectedVideo.mirror}
+                  onChange={(e) => patchVideo(selectedCell.id, { mirror: e.target.checked })}
+                />
+                鏡像
+              </label>
+            </div>
+          )}
           <label className="check">
             <input type="checkbox" checked={framed} onChange={(e) => setFramed(e.target.checked)} />
             安全區與底欄
@@ -583,18 +712,47 @@ export function App() {
         <div className="frame">
           <div className="canvas-host">
             <div ref={hostRef} className="canvas-mount" />
-            <div className="overlay">
-              {multi &&
-                edit.cells.map((c) => (
+            <div className="overlay" ref={overlayRef}>
+              {edit.cells.map((c) => {
+                const v = findCell(root, c.id)?.video;
+                const clip = v ? clips[v.clipId] : undefined;
+                const pannable = c.id === selectedCell.id && v && clip;
+                return (
                   <button
                     key={c.id}
                     type="button"
                     aria-label={`選 ${c.id}`}
-                    className={`cell-hit${c.id === selectedCell.id ? ' on' : ''}`}
+                    className={`cell-hit${multi ? '' : ' solo'}${multi && c.id === selectedCell.id ? ' on' : ''}${pannable ? ' pan' : ''}`}
                     style={{ left: pctX(c.x), top: pctY(c.y), width: pctX(c.w), height: pctY(c.h) }}
                     onClick={() => setSelectedId(c.id)}
+                    onPointerDown={(e) => {
+                      if (!pannable) return;
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                      alignDrag.current = {
+                        x: e.clientX,
+                        y: e.clientY,
+                        ax: v.alignX,
+                        ay: v.alignY,
+                      };
+                    }}
+                    onPointerMove={(e) => {
+                      const start = alignDrag.current;
+                      if (!pannable || !start || !e.currentTarget.hasPointerCapture(e.pointerId))
+                        return;
+                      const host = overlayRef.current?.getBoundingClientRect();
+                      if (!host) return;
+                      const k = PREVIEW_WIDTH / host.width;
+                      const dx = (e.clientX - start.x) * k * (v.mirror ? -1 : 1);
+                      const dy = (e.clientY - start.y) * k;
+                      const a = dragAlign(clip, c, { x: start.ax, y: start.ay }, dx, dy);
+                      patchVideo(c.id, { alignX: a.x, alignY: a.y });
+                    }}
+                    onPointerUp={() => {
+                      alignDrag.current = null;
+                    }}
                   />
-                ))}
+                );
+              })}
               {edit.dividers.map((d) => {
                 const row = d.direction === 'row';
                 const style = row

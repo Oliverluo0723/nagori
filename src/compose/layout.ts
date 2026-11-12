@@ -1,4 +1,4 @@
-import type { Cell, LayoutNode, Split } from './types';
+import type { Cell, LayoutNode, Split, VideoLayer } from './types';
 
 /**
  * 切格樹的編輯操作。全部是純函式：回傳新樹，不改舊樹。
@@ -77,6 +77,19 @@ export function setRatio(root: LayoutNode, splitId: string, ratio: number): Layo
 
 export function setCellLook(root: LayoutNode, cellId: string, lookId: string): LayoutNode {
   return mapNode(root, cellId, (n) => (n.kind === 'cell' ? { ...n, lookId, params: {} } : n));
+}
+
+/** 放、改、拿掉一格的影片；look 留著，拿掉影片就回到原本的 look。 */
+export function setCellVideo(
+  root: LayoutNode,
+  cellId: string,
+  video: VideoLayer | undefined,
+): LayoutNode {
+  return mapNode(root, cellId, (n) => {
+    if (n.kind !== 'cell') return n;
+    const { video: _old, ...rest } = n;
+    return video ? { ...rest, video } : rest;
+  });
 }
 
 export interface Box {

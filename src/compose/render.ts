@@ -1,4 +1,5 @@
 import type { Readings } from '../analysis/types';
+import type { Painter } from '../looks/painter/painter';
 import { readoutsFor } from '../looks/readouts';
 import { looks } from '../looks/registry';
 import type { Look, LookContext } from '../looks/types';
@@ -7,7 +8,8 @@ import { drawFrame, frameLayout } from './frame';
 import { type Box, findCell, layoutTree } from './layout';
 import type { SurfaceProvider } from './surface';
 import { themes } from './themes';
-import type { CanvasStyle, Composition, LayoutNode } from './types';
+import type { CanvasStyle, Composition, LayoutNode, VideoLayer } from './types';
+import { coverCrop, type VideoFrame, type VideoProvider } from './video';
 
 export interface CellRect {
   id: string;
@@ -72,11 +74,57 @@ export interface RenderFrameOptions {
   readings: Readings;
   surfaces: SurfaceProvider;
   target: { w: number; h: number; ctx?: CanvasRenderingContext2D };
+  /** 有影片格才需要；沒給的話影片格只畫底色。 */
+  videos?: VideoProvider;
+}
+
+/** 疊在影片上的 look 與外框：background() 改成清成透明，其他照舊。 */
+const clearBgCache = new WeakMap<Painter, Painter>();
+function clearBackground(p: Painter): Painter {
+  let wrapped = clearBgCache.get(p);
+  if (!wrapped) {
+    const bound = new Map<PropertyKey, unknown>();
+    wrapped = new Proxy(p, {
+      get(target, key) {
+        if (key === 'background') return () => target.clear();
+        let fn = bound.get(key);
+        if (fn === undefined) {
+          const v = Reflect.get(target, key, target);
+          fn = typeof v === 'function' ? v.bind(target) : v;
+          bound.set(key, fn);
+        }
+        return fn;
+      },
+    });
+    clearBgCache.set(p, wrapped);
+  }
+  return wrapped;
+}
+
+/** 影片疊 look 時壓一層底色，讓線條在亮的畫面上也讀得到。 */
+const SCRIM_ALPHA = 0.35;
+
+function drawVideo(
+  ctx: CanvasRenderingContext2D,
+  frame: VideoFrame,
+  rect: CellRect,
+  layer: VideoLayer,
+): void {
+  const crop = coverCrop(frame, rect, layer.alignX, layer.alignY, layer.mirror);
+  ctx.save();
+  if (layer.mirror) {
+    ctx.translate(rect.x + rect.w, rect.y);
+    ctx.scale(-1, 1);
+    ctx.drawImage(frame.image, crop.x, crop.y, crop.w, crop.h, 0, 0, rect.w, rect.h);
+  } else {
+    ctx.drawImage(frame.image, crop.x, crop.y, crop.w, crop.h, rect.x, rect.y, rect.w, rect.h);
+  }
+  ctx.restore();
 }
 
 /** 給一個 t，畫出整張畫布的一幀。有 target.ctx 時把各格貼上去。 */
 export function renderFrame(opts: RenderFrameOptions): void {
-  const { composition, t, readings, surfaces, target } = opts;
+  const { composition, t, readings, surfaces, target, videos } = opts;
   const theme = themes[composition.themeId];
   if (!theme) throw new Error(`unknown theme: ${composition.themeId}`);
 
@@ -89,12 +137,27 @@ export function renderFrame(opts: RenderFrameOptions): void {
   for (const rect of layoutTree(composition.root, box, gap).cells) {
     const cell = findCell(composition.root, rect.id);
     if (!cell) continue;
+    const video = cell.video;
+    if (video && target.ctx) {
+      // 影片填滿整格（cover），不留報表外框的邊
+      target.ctx.fillStyle = theme.paper;
+      target.ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+      const frame = videos?.frame(cell.id);
+      if (frame && frame.w > 0 && frame.h > 0) drawVideo(target.ctx, frame, rect, video);
+      if (video.lookOnTop) {
+        target.ctx.globalAlpha = SCRIM_ALPHA;
+        target.ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+        target.ctx.globalAlpha = 1;
+      }
+    }
+    if (video && !video.lookOnTop) continue;
     const look = looks[cell.lookId];
     if (!look) throw new Error(`unknown look: ${cell.lookId}`);
     const layout = frameLayout(rect.w, rect.h, withTitle);
     const { plot } = layout;
     // look 只看得到繪圖框：它的 w/h 就是框的大小，標籤改由外框畫
     const surface = surfaces.get(cell.id, plot.w, plot.h);
+    const lookPainter = video ? clearBackground(surface.painter) : surface.painter;
     const ctx: LookContext = {
       t,
       w: plot.w,
@@ -104,9 +167,9 @@ export function renderFrame(opts: RenderFrameOptions): void {
       params: paramsWithDefaults(look, cell.params),
       seed: hashString(cell.id),
     };
-    look.draw(surface.painter, ctx);
+    look.draw(lookPainter, ctx);
     const frame = surfaces.get(`${cell.id}:frame`, rect.w, rect.h);
-    drawFrame(frame.painter, {
+    drawFrame(video ? clearBackground(frame.painter) : frame.painter, {
       w: rect.w,
       h: rect.h,
       theme,

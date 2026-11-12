@@ -729,3 +729,41 @@ kbd {
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   }
 }
+
+.cell-hit.solo:hover {
+  border-color: transparent;
+}
+
+.cell-hit.pan {
+  cursor: grab;
+  touch-action: none;
+}
+
+.cell-hit.pan:active {
+  cursor: grabbing;
+}
+
+.video-box {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.file-chip {
+  position: relative;
+  cursor: pointer;
+}
+
+.file-chip input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.video-opts {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}

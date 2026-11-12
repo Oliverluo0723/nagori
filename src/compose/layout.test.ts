@@ -1,12 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, test } from 'vitest';
 import { looks } from '../looks/registry';
 import {
   cellsOf,
+  findCell,
   layoutTree,
   PRESETS,
   ratioAt,
   removeCell,
   setCellLook,
+  setCellVideo,
   setRatio,
   splitCell,
 } from './layout';
@@ -85,4 +87,13 @@ describe('PRESETS', () => {
       expect(new Set(cells.map((c) => c.id)).size).toBe(cells.length);
     }
   });
+});
+
+test('setCellVideo adds and removes a video, keeping the look', () => {
+  const one = PRESETS[0].build();
+  const v = { clipId: 'v1', start: 2, alignX: 0.5, alignY: 0.5, mirror: false, lookOnTop: true };
+  const withVideo = setCellVideo(one, 'c1', v);
+  expect(findCell(withVideo, 'c1')?.video).toEqual(v);
+  const back = setCellVideo(withVideo, 'c1', undefined);
+  expect(back).toEqual(one);
 });

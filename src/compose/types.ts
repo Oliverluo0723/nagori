@@ -12,11 +12,28 @@ export interface Theme {
   glow: boolean;
 }
 
+/**
+ * 格子裡的 mp4（底層）。影片釘在歌的時間軸上：歌的第 start 秒播影片的第 0 秒；
+ * 範圍外停在第一幀或最後一幀，不 loop、不黑掉。影片的聲音不用。
+ */
+export interface VideoLayer {
+  /** 對到 App 的影片清單（檔案本身不進版型） */
+  clipId: string;
+  start: number;
+  /** cover 裁切時對齊的位置，0..1，0.5 置中；以畫面上看到的方向為準（鏡像後也一樣） */
+  alignX: number;
+  alignY: number;
+  mirror: boolean;
+  /** 上層疊去背的 look；false 就整格只有影片 */
+  lookOnTop: boolean;
+}
+
 export interface Cell {
   kind: 'cell';
   id: string;
   lookId: string;
   params: Record<string, number | boolean>;
+  video?: VideoLayer;
 }
 
 export interface Split {
