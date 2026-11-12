@@ -50,3 +50,14 @@ test('registry exposes lidar as number 15', () => {
   expect(looks.lidar).toBe(lidarLook);
   expect(lidarLook).toMatchObject({ id: 'lidar', number: 15, listens: ['spectrum', 'tempo'] });
 });
+
+test('readouts: scan lines, points drawn, frequency range', () => {
+  const r = lidarLook.readouts?.(
+    makeCtx(30, { spectrum: flatSpectrum(60, 0.6) }, { params: { lines: 10, dots: 8 } }),
+  );
+  expect(r).toEqual([
+    { label: 'SCAN LINES', value: '10' },
+    { label: 'POINTS', value: '80' },
+    { label: 'RANGE', value: '40 Hz – 14 kHz' },
+  ]);
+});
