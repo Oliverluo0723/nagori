@@ -56,9 +56,30 @@ test('toMono averages left and right', () => {
   );
 });
 
-test('modelAvailable is false on 404 and true on 200', async () => {
-  expect(await modelAvailable('/x', async () => new Response(null, { status: 404 }))).toBe(false);
-  expect(await modelAvailable('/x', async () => new Response(null, { status: 200 }))).toBe(true);
+const head = (status: number, headers: Record<string, string>) => async () =>
+  new Response(null, { status, headers });
+
+test('modelAvailable is false on 404 and true on 200 with the right size', async () => {
+  expect(await modelAvailable('/x', head(404, {}))).toBe(false);
+  expect(
+    await modelAvailable(
+      '/x',
+      head(200, { 'content-type': 'application/octet-stream', 'content-length': '180534758' }),
+    ),
+  ).toBe(true);
+});
+
+test('modelAvailable is false when dev server falls back to index.html or the size is wrong (reviewer)', async () => {
+  // Vite dev 對不存在的檔回 200 的 index.html
+  expect(
+    await modelAvailable('/x', head(200, { 'content-type': 'text/html', 'content-length': '512' })),
+  ).toBe(false);
+  expect(
+    await modelAvailable(
+      '/x',
+      head(200, { 'content-type': 'application/octet-stream', 'content-length': '1234' }),
+    ),
+  ).toBe(false);
 });
 
 test('modelAvailable is false when fetch throws', async () => {

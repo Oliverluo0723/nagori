@@ -16,6 +16,9 @@ const ORT_WASM = new URL(
 export const MODEL_URL = '/models/htdemucs_embedded.onnx';
 export const MODEL_SOURCE =
   'https://huggingface.co/timcsy/demucs-web-onnx/resolve/main/htdemucs_embedded.onnx';
+export const MODEL_BYTES = 180534758;
+/** separateStems 在模型不在時丟的錯誤訊息開頭（useProject 靠它挑提示文字） */
+export const MODEL_MISSING = 'model missing';
 
 export interface StereoChannels {
   left: Float32Array;
@@ -68,8 +71,12 @@ export async function separateStems(
   if (left.length !== right.length)
     throw new Error(`separateStems: channel length mismatch ${left.length} vs ${right.length}`);
   const onProgress = opts.onProgress ?? (() => {});
+  const modelUrl = opts.modelUrl ?? MODEL_URL;
+  // 真的要載 ORT 之前先確認模型在（省掉 29 MB 的 wasm 載入，也不靠 ORT 去拒絕一份 index.html）
+  if (!opts.createProcessor && !(await modelAvailable(modelUrl)))
+    throw new Error(`${MODEL_MISSING}: ${modelUrl}`);
   const processor = await (opts.createProcessor ?? createDemucsProcessor)(onProgress);
-  await processor.loadModel(opts.modelUrl ?? MODEL_URL);
+  await processor.loadModel(modelUrl);
   const out = await processor.separate(left, right);
   const stems: Stems = {
     sampleRate: 44100,
@@ -82,14 +89,20 @@ export async function separateStems(
   return stems;
 }
 
-/** 模型檔在不在（HEAD 200）；抓不到就 false，讓流程退回直接分析混音 */
+/**
+ * 模型檔在不在：HEAD 要 ok、不是 text/html（Vite dev 對不存在的檔會回 200 的 index.html）、
+ * 有 content-length 的話要等於模型大小。抓不到就 false，讓流程退回直接分析混音。
+ */
 export async function modelAvailable(
   url: string = MODEL_URL,
   fetchFn: typeof fetch = fetch,
 ): Promise<boolean> {
   try {
     const res = await fetchFn(url, { method: 'HEAD' });
-    return res.ok;
+    if (!res.ok) return false;
+    if ((res.headers.get('content-type') ?? '').includes('text/html')) return false;
+    const length = res.headers.get('content-length');
+    return length === null || Number(length) === MODEL_BYTES;
   } catch {
     return false;
   }

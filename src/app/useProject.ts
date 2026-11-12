@@ -1,10 +1,11 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { analyzeMidi, withSpectrum } from '../analysis/analyze';
 import type { Progress, Stage } from '../analysis/analyzeAudio';
 import { decodeAudio } from '../analysis/audio/decode';
 import { analyzeSpectrum } from '../analysis/audio/spectrum';
 import { mergeReadings } from '../analysis/merge';
 import { OpfsStemStore, type StemStore, stemKey } from '../analysis/stems/cache';
+import { MODEL_MISSING } from '../analysis/stems/separate';
 import { tempoMapFromBpm } from '../analysis/tempo';
 import type { Readings } from '../analysis/types';
 import { type AnalyzeFn, analyzeInline, analyzeInWorker } from '../analysis/workerClient';
@@ -12,12 +13,18 @@ import { type AnalyzeFn, analyzeInline, analyzeInWorker } from '../analysis/work
 const AUDIO_EXT = ['mp3', 'wav', 'aiff', 'aif', 'flac', 'm4a', 'ogg'];
 const MIDI_EXT = ['mid', 'midi'];
 
-export type LoadFailure = 'need-audio' | 'parse-failed' | 'no-beat';
+export type LoadFailure = 'need-audio' | 'parse-failed' | 'no-beat' | 'aborted';
 export type LoadResult =
   | { ok: true; readings: Readings; audioUrl: string; name: string; notes: string[] }
   | { ok: false; reason: LoadFailure };
 
-const NOTE_NO_STEMS = '找不到分軌模型，改用混音分析：先跑 pnpm setup:models';
+const NOTE_NO_MODEL = '找不到分軌模型，改用混音分析：先跑 pnpm setup:models';
+const noteFor = (separationError: string | undefined) =>
+  !separationError || separationError.startsWith(MODEL_MISSING)
+    ? NOTE_NO_MODEL
+    : `分軌失敗，改用混音分析：${separationError}`;
+
+const isAbort = (err: unknown) => err instanceof Error && err.name === 'AbortError';
 
 export interface LoadDeps {
   getDuration: (audio: File) => Promise<number>;
@@ -35,6 +42,8 @@ export interface LoadDeps {
   stemStore?: StemStore;
   /** 要不要分軌（預設要） */
   separate?: boolean;
+  /** 取消（使用者又丟了另一首）：結果是 { ok: false, reason: 'aborted' } */
+  signal?: AbortSignal;
   onProgress?: Progress;
 }
 
@@ -89,6 +98,7 @@ export async function loadDroppedFiles(files: File[], deps: LoadDeps): Promise<L
           const cached = await store.get(key);
           const separate = deps.separate !== false && !cached;
           let gotStems = false;
+          let separationError: string | undefined;
           audioReadings = await analyze(
             {
               pcm,
@@ -103,9 +113,13 @@ export async function loadDroppedFiles(files: File[], deps: LoadDeps): Promise<L
               gotStems = true;
               store.put(key, stems).catch((err) => console.warn('stem cache write failed', err));
             },
+            (message) => {
+              separationError = message;
+            },
+            deps.signal,
           );
           // 要分軌卻沒拿到 stems：模型不在或 ORT 載不起來，分析已退回混音
-          if (separate && !gotStems) notes.push(NOTE_NO_STEMS);
+          if (separate && !gotStems) notes.push(noteFor(separationError));
         } else {
           audioReadings = withSpectrum(
             { ...midiReadings, drums: [], chords: [], bass: [], key: undefined, source: undefined },
@@ -113,7 +127,7 @@ export async function loadDroppedFiles(files: File[], deps: LoadDeps): Promise<L
           );
         }
       } catch (err) {
-        if (!midiReadings) throw err;
+        if (isAbort(err) || !midiReadings) throw err;
         console.warn('audio decode failed; continuing with MIDI only', err);
       }
     }
@@ -130,6 +144,7 @@ export async function loadDroppedFiles(files: File[], deps: LoadDeps): Promise<L
       notes,
     };
   } catch (err) {
+    if (isAbort(err)) return { ok: false, reason: 'aborted' };
     console.error('load failed', err);
     return { ok: false, reason: 'parse-failed' };
   }
@@ -167,13 +182,24 @@ export type ProjectState =
 export function useProject() {
   const [state, setState] = useState<ProjectState>({ status: 'empty' });
 
+  // 分析中又丟了另一首：取消前一次（Worker terminate），而且舊的那次什麼都不准再寫進 state
+  const current = useRef<AbortController | null>(null);
+
   const drop = useCallback(async (files: File[]) => {
+    current.current?.abort();
+    const ctrl = new AbortController();
+    current.current = ctrl;
+    const live = () => !ctrl.signal.aborted;
     setState({ status: 'analyzing', stage: 'decode', fraction: 0 });
     const r = await loadDroppedFiles(files, {
       getDuration: audioDuration,
       decode: decodeAudio,
-      onProgress: (stage, fraction) => setState({ status: 'analyzing', stage, fraction }),
+      signal: ctrl.signal,
+      onProgress: (stage, fraction) => {
+        if (live()) setState({ status: 'analyzing', stage, fraction });
+      },
     });
+    if (!live()) return;
     if (r.ok)
       setState({
         status: 'ready',

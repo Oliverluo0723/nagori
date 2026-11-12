@@ -68,3 +68,14 @@ test('silent bass stem → no bass notes, source none (review focus 4)', async (
   expect(r.bass).toEqual([]);
   expect(r.source?.bass).toBe('none');
 }, 60000);
+
+test('bass stem that is only leakage (−60 dB of a pitched line) → no bass notes, source none (reviewer)', async () => {
+  // Demucs 不會輸出數位零：純鋼琴曲、清唱的 bass 軌是很小聲的殘留；偵測器本身是尺度不變的，要靠跟混音比
+  const mix = synthBeat({ bars: 2 });
+  const leak = synthBeat({ bars: 2, drums: false, chords: [[]] }).map((v) => v * 1e-3);
+  const r = await analyzeAudio(mix, 44100, () => {}, {
+    stems: { sampleRate: 44100, drums: mix, bass: leak, other: mix, vocals: leak },
+  });
+  expect(r.bass).toEqual([]);
+  expect(r.source?.bass).toBe('none');
+}, 60000);

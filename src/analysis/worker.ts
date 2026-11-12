@@ -7,12 +7,12 @@ const post = (m: WorkerMessage) => self.postMessage(m);
 self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
   const { id, input } = e.data;
   try {
-    const { readings } = await runAnalysis(
+    const { readings, separationError } = await runAnalysis(
       input,
       (stage, fraction) => post({ id, type: 'progress', stage, fraction }),
       (stems) => post({ id, type: 'stems', stems }),
     );
-    post({ id, type: 'done', readings });
+    post({ id, type: 'done', readings, separationError });
   } catch (err) {
     post({ id, type: 'error', message: err instanceof Error ? err.message : String(err) });
   }

@@ -220,6 +220,43 @@ test('separation unavailable → falls back to mix analysis with a note (review 
   }
 });
 
+test('separation error message is carried into the note (reviewer minor 1)', async () => {
+  const analyze: AnalyzeFn = async (input, _p, _onStems, onSeparationError) => {
+    onSeparationError?.('ORT init failed');
+    return fakeReadings(input.pcm, input.sampleRate);
+  };
+  const r = await loadDroppedFiles([new File(['abc'], 'song.mp3')], {
+    ...deps,
+    decode: fakeDecode,
+    analyze,
+    stemStore: new MemoryStemStore(),
+  });
+  if (r.ok) {
+    expect(r.notes).toHaveLength(1);
+    expect(r.notes[0]).toMatch(/ORT init failed/);
+    expect(r.notes[0]).not.toMatch(/setup:models/);
+  }
+});
+
+test('analyze receives the abort signal; an aborted run returns reason aborted (reviewer important 1)', async () => {
+  const ctrl = new AbortController();
+  let seen: AbortSignal | undefined;
+  const analyze: AnalyzeFn = async (input, _p, _s, _e, signal) => {
+    seen = signal;
+    ctrl.abort();
+    throw new DOMException('aborted', 'AbortError');
+  };
+  const r = await loadDroppedFiles([new File(['abc'], 'song.mp3')], {
+    ...deps,
+    decode: fakeDecode,
+    analyze,
+    stemStore: new MemoryStemStore(),
+    signal: ctrl.signal,
+  });
+  expect(seen).toBe(ctrl.signal);
+  expect(r).toEqual({ ok: false, reason: 'aborted' });
+});
+
 test('separation delivered stems → no notes', async () => {
   const analyze: AnalyzeFn = async (input, _p, onStems) => {
     onStems?.(fakeStems());
@@ -291,9 +328,14 @@ test('deps.separate=false → analyze gets separate=false', async () => {
 
 test('analyzeInline: separation failure falls back to mix analysis', async () => {
   const pcm = new Float32Array(44100);
+  let reported: string | undefined;
   const r = await analyzeInline(
     { pcm, sampleRate: 44100, left: pcm, right: pcm, separate: true },
     () => {},
+    undefined,
+    (m) => {
+      reported = m;
+    },
     undefined,
     async () => {
       throw new Error('404');
@@ -301,6 +343,7 @@ test('analyzeInline: separation failure falls back to mix analysis', async () =>
   );
   expect(r.source?.bass).not.toBe('stem');
   expect(r.source?.drums).not.toBe('stem');
+  expect(reported).toBe('404');
 });
 
 test('analyzeInline: separation success → stems reported and sources are stem', async () => {
@@ -317,6 +360,8 @@ test('analyzeInline: separation success → stems reported and sources are stem'
     (s) => {
       got = s;
     },
+    undefined,
+    undefined,
     async (_l, _r, opts) => {
       opts?.onProgress?.(0.5);
       return stems;

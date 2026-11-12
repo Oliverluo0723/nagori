@@ -14,6 +14,7 @@ const ERROR_TEXT = {
   'need-audio': '需要音檔',
   'parse-failed': '解析失敗',
   'no-beat': '分析不到節拍',
+  aborted: '已取消',
 } as const;
 
 const SOURCE_TEXT: Record<SourceKind, string> = {

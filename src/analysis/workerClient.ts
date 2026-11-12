@@ -20,6 +20,10 @@ export type AnalyzeFn = (
   input: AnalyzeInput,
   onProgress: Progress,
   onStems?: (stems: Stems) => void,
+  /** 要分軌卻分不成時的原因（模型不在、ORT 載不起來…） */
+  onSeparationError?: (message: string) => void,
+  /** 取消：Worker 版會 terminate，之後 reject AbortError */
+  signal?: AbortSignal,
 ) => Promise<Readings>;
 
 export type SeparateFn = (
@@ -66,29 +70,49 @@ export async function runAnalysis(
   return { readings, separated: stems !== undefined, separationError };
 }
 
-/** 不開 Worker 的版本（測試、退路） */
+/** 不開 Worker 的版本（測試、退路）；多一個 separateFn 可注入 */
 export const analyzeInline = async (
   input: AnalyzeInput,
   onProgress: Progress,
   onStems?: (stems: Stems) => void,
+  onSeparationError?: (message: string) => void,
+  _signal?: AbortSignal,
   separateFn: SeparateFn = separateStems,
-): Promise<Readings> => (await runAnalysis(input, onProgress, onStems, separateFn)).readings;
+): Promise<Readings> => {
+  const out = await runAnalysis(input, onProgress, onStems, separateFn);
+  if (out.separationError) onSeparationError?.(out.separationError);
+  return out.readings;
+};
 
 export type WorkerRequest = { id: number; input: AnalyzeInput };
 export type WorkerMessage =
   | { id: number; type: 'progress'; stage: Parameters<Progress>[0]; fraction: number }
   | { id: number; type: 'stems'; stems: Stems }
-  | { id: number; type: 'done'; readings: Readings }
+  | { id: number; type: 'done'; readings: Readings; separationError?: string }
   | { id: number; type: 'error'; message: string };
 
 let nextId = 1;
 
+const abortError = () => new DOMException('analysis aborted', 'AbortError');
+
 /** 在 module Worker 裡跑 runAnalysis；Float32Array 用 transfer 搬過去（主執行緒之後不再碰它們） */
-export const analyzeInWorker: AnalyzeFn = (input, onProgress, onStems) =>
+export const analyzeInWorker: AnalyzeFn = (input, onProgress, onStems, onSeparationError, signal) =>
   new Promise<Readings>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(abortError());
+      return;
+    }
     const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
     const id = nextId++;
-    const finish = () => worker.terminate();
+    const onAbort = () => {
+      worker.terminate();
+      reject(abortError());
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+    const finish = () => {
+      signal?.removeEventListener('abort', onAbort);
+      worker.terminate();
+    };
     worker.onmessage = (e: MessageEvent<WorkerMessage>) => {
       const m = e.data;
       if (m.id !== id) return;
@@ -96,6 +120,7 @@ export const analyzeInWorker: AnalyzeFn = (input, onProgress, onStems) =>
       else if (m.type === 'stems') onStems?.(m.stems);
       else if (m.type === 'done') {
         finish();
+        if (m.separationError) onSeparationError?.(m.separationError);
         resolve(m.readings);
       } else {
         finish();
@@ -105,6 +130,10 @@ export const analyzeInWorker: AnalyzeFn = (input, onProgress, onStems) =>
     worker.onerror = (e) => {
       finish();
       reject(e.error ?? new Error(e.message));
+    };
+    worker.onmessageerror = () => {
+      finish();
+      reject(new Error('worker message could not be deserialized'));
     };
     const transfer = new Set<ArrayBufferLike>([
       input.pcm.buffer,
