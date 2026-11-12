@@ -80,7 +80,16 @@ export function App() {
         <h1 style={styles.logo}>
           oto<span style={{ color: '#ff4a1c' }}>.</span>
         </h1>
-        <p style={styles.hint}>把 mp3 與同名 .mid 一起拖進這個視窗</p>
+        <p style={styles.hint}>把 mp3 與同名 .mid 一起拖進這個視窗，或</p>
+        <input
+          type="file"
+          multiple
+          accept=".mp3,.wav,.aiff,.aif,.flac,.m4a,.ogg,.mid,.midi"
+          onChange={(e) => {
+            if (e.target.files) drop(Array.from(e.target.files));
+          }}
+          style={styles.file}
+        />
 
         {state.status === 'loading' && <p>分析中…</p>}
         {state.status === 'error' && <p style={styles.error}>{ERROR_TEXT[state.reason]}</p>}
@@ -157,6 +166,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     margin: 0,
   },
+  file: { fontSize: 12, color: '#7a7a7a' },
   row: { display: 'flex', gap: 8 },
   button: {
     background: '#1a1a1a',
