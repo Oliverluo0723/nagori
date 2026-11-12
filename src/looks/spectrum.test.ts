@@ -15,7 +15,11 @@ const H = 1920;
 function spectrum(frames: number[][]): Spectrum {
   const bins = 64;
   const data = new Float32Array(frames.length * bins);
-  frames.forEach((row, f) => row.forEach((v, b) => (data[f * bins + b] = v)));
+  frames.forEach((row, f) => {
+    row.forEach((v, b) => {
+      data[f * bins + b] = v;
+    });
+  });
   return { fps: 50, bins, minHz: 30, maxHz: 16000, frames: data, frameCount: frames.length };
 }
 const row = (bin: number, v: number) => {
