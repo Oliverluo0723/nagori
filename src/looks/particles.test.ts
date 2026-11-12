@@ -2,12 +2,10 @@ import { expect, test } from 'vitest';
 import { flatSpectrum, hasText, makeCtx, opsOf, spectrumWith } from '../../test/fixtures/looks';
 import { binHz } from '../analysis/audio/spectrum';
 import type { BassNote, ChordEvent, DrumHit } from '../analysis/types';
-import { darkGlow, paperInk } from '../compose/themes';
-import { cometLook } from './comet';
+import { paperInk } from '../compose/themes';
 import { dewLook } from './dew';
 import { flowLook, sources } from './flow';
 import { fountainLook } from './fountain';
-import { kaleidoLook } from './kaleido';
 import { RecordingPainter } from './painter/recording';
 import { looks } from './registry';
 import { bassAt, rngFor, ticksAlive } from './sheet';
@@ -30,8 +28,6 @@ const full = { spectrum: flatSpectrum(60, 0.6), drums: hits, bass, chords };
 const all: [Look, number][] = [
   [fountainLook, 19],
   [dewLook, 20],
-  [kaleidoLook, 21],
-  [cometLook, 22],
   [starsLook, 23],
   [flowLook, 24],
 ];
@@ -99,35 +95,6 @@ test('dew: drops only on threads of bands with energy, and they fall over time',
   // 同一滴（第 0 拍出的，壽命 10 秒所以兩邊都還在）在 3.5 秒時比 3 秒時低
   const first = (r: RecordingPainter) => opsOf(r, 'circle')[0].args[1] as number;
   expect(first(q)).toBeGreaterThan(first(p));
-});
-
-test('kaleido: each particle appears 2 × segments times (halo + core on dark); old hits vanish', () => {
-  const p = new RecordingPainter();
-  kaleidoLook.draw(p, makeCtx(1.1, { drums: [hits[0]] }, { params: { segments: 6 } }));
-  expect(opsOf(p, 'circle')).toHaveLength(6 * 12 * 2);
-  expect(opsOf(p, 'glow')).toHaveLength(0);
-  const q = new RecordingPainter();
-  kaleidoLook.draw(q, makeCtx(10, { drums: [hits[0]] }));
-  expect(opsOf(q, 'circle')).toHaveLength(0);
-  const fills = p.ops.filter((o) => o.op === 'fill').map((o) => o.args[0]);
-  expect(fills).toContain(darkGlow.accent);
-});
-
-test('comet: head sits on the now line at the bass pitch; falls back to low band without bass', () => {
-  const p = new RecordingPainter();
-  cometLook.draw(p, makeCtx(3, { bass, chords }));
-  const head = opsOf(p, 'circle').slice(-2)[0];
-  expect(head.args[0]).toBeCloseTo(1080 * 0.62);
-  const higher = new RecordingPainter();
-  cometLook.draw(higher, makeCtx(1, { bass, chords })); // midi 38 低於 43 → y 更大
-  const headY = (r: RecordingPainter) => opsOf(r, 'circle').slice(-2)[0].args[1] as number;
-  expect(headY(higher)).toBeGreaterThan(headY(p));
-  const noBass = new RecordingPainter();
-  cometLook.draw(noBass, makeCtx(3, { spectrum: flatSpectrum(60, 0.5) }));
-  expect(opsOf(noBass, 'circle').length).toBeGreaterThan(0);
-  const nothing = new RecordingPainter();
-  cometLook.draw(nothing, makeCtx(3, {}));
-  expect(opsOf(nothing, 'circle')).toHaveLength(0);
 });
 
 test('stars: every hit of the sky is a star, lit ones are bigger, later skies show their own bars', () => {

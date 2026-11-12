@@ -1,18 +1,22 @@
 import { positionAt, timeOfBar } from '../analysis/tempo';
+import type { DrumHit } from '../analysis/types';
 import type { Painter } from './painter/painter';
-import { drawLabel, paramNum } from './sheet';
-import type { Look, LookContext, ParamDef } from './types';
+import { paramNum } from './sheet';
+import type { Look, LookContext, ParamDef, Readout } from './types';
 
 const params: ParamDef[] = [
-  { key: 'rows', label: '一頁小節數', min: 2, max: 8, default: 6 },
+  { key: 'rows', label: '一頁小節數（方形格）', min: 2, max: 8, default: 6 },
   { key: 'size', label: '墨點大小', min: 0.5, max: 2, default: 1 },
 ];
 
 const STEPS = 16;
-const LEFT = 0.08;
-const WIDTH = 0.84;
-const TOP = 0.14;
-const HEIGHT = 0.72;
+/** 格子在紙上的範圍（比例），照 Oto 量的。 */
+const LEFT = 0.085;
+const RIGHT = 0.915;
+const TOP = 0.11;
+const BOTTOM = 0.89;
+/** Oto 的紙是 4:3 左右，那裡一頁 rows 列；更高的紙就多印幾列。 */
+const REF_ASPECT = 0.79;
 const SPREAD_SECONDS = 0.6;
 
 /** hit 落在哪一小節、哪一個 16 分格。 */
@@ -30,78 +34,175 @@ function quantize(ctx: LookContext, time: number): { bar: number; step: number }
   return step < 0 ? null : { bar, step };
 }
 
-function draw(p: Painter, ctx: LookContext): void {
-  const { w, h, t, theme } = ctx;
-  const rows = Math.max(1, Math.round(paramNum(ctx, params, 'rows')));
-  const size = paramNum(ctx, params, 'size');
-  const cw = (w * WIDTH) / STEPS;
-  const rh = (h * HEIGHT) / rows;
-  const colX = (s: number) => w * LEFT + (s + 0.5) * cw;
-  const rowY = (r: number) => h * TOP + (r + 0.5) * rh;
+/** 一頁幾列：參數是方形格的列數，依紙的長寬比換算。 */
+export function rowsFor(ctx: LookContext): number {
+  const base = Math.max(1, Math.round(paramNum(ctx, params, 'rows')));
+  const aspect = Math.min(3, Math.max(0.4, ctx.h / Math.max(1, ctx.w) / REF_ASPECT));
+  return Math.max(2, Math.round(base * aspect));
+}
 
-  const pos = positionAt(ctx.readings.tempo, t);
+interface Page {
+  rows: number;
+  firstBar: number;
+  lastBar: number;
+  bar: number;
+  step: number;
+}
+
+function pageAt(ctx: LookContext): Page {
+  const rows = rowsFor(ctx);
+  const pos = positionAt(ctx.readings.tempo, ctx.t);
   const page = Math.floor((pos.bar - 1) / rows);
   const firstBar = page * rows + 1;
-  const lastBar = firstBar + rows - 1;
+  const step = Math.min(STEPS - 1, Math.floor(pos.barPhase * STEPS));
+  return { rows, firstBar, lastBar: firstBar + rows - 1, bar: pos.bar, step };
+}
 
-  p.background(theme.paper);
+interface Blot {
+  hit: DrumHit;
+  row: number;
+  step: number;
+}
+
+/** 這一頁已經印上去的 hit（t 之後的不算）。 */
+function printed(ctx: LookContext, page: Page): Blot[] {
+  const out: Blot[] = [];
+  for (const hit of ctx.readings.drums) {
+    if (hit.time > ctx.t) break;
+    const q = quantize(ctx, hit.time);
+    if (!q || q.bar < page.firstBar || q.bar > page.lastBar) continue;
+    out.push({ hit, row: q.bar - page.firstBar, step: q.step });
+  }
+  return out;
+}
+
+function draw(p: Painter, ctx: LookContext): void {
+  const { w, h, t, theme } = ctx;
+  const page = pageAt(ctx);
+  const { rows } = page;
+  const size = paramNum(ctx, params, 'size');
+  const unit = Math.min(w, h);
+  const cw = (w * (RIGHT - LEFT)) / (STEPS - 1);
+  const rh = rows > 1 ? (h * (BOTTOM - TOP)) / (rows - 1) : 0;
+  const colX = (s: number) => w * LEFT + s * cw;
+  const rowY = (r: number) => h * TOP + r * rh;
+  // 墨點大小跟格距走，小格子裡也不會糊成一片
+  const cell = Math.min(cw, rh || cw);
+
+  // 紙：兩個主題都是淡色的紙（黑底主題用 ink 當紙色），整張先染一層淡淡的粉
+  const sheet = theme.glow ? theme.ink : theme.paper;
+  const dark = theme.glow ? theme.paper : theme.ink;
+  const pink = theme.noteColors[11] ?? theme.accent;
+  p.background(sheet);
+  p.haze(w * 0.5, h * 0.5, Math.hypot(w, h) * 0.6, theme.accent, 0.07);
+
+  const blots = printed(ctx, page);
+
+  // 粉霧：hit 聚在哪裡就在哪裡暈開，越多越濃
+  if (blots.length) {
+    let sx = 0;
+    let sy = 0;
+    let sw = 0;
+    for (const b of blots) {
+      const k = b.hit.kind === 'kick' ? 1.6 : b.hit.kind === 'snare' ? 1 : 0.4;
+      sx += colX(b.step) * k;
+      sy += rowY(b.row) * k;
+      sw += k;
+    }
+    const cx = sx / sw;
+    const cy = sy / sw;
+    let vx = 0;
+    let vy = 0;
+    for (const b of blots) {
+      vx += (colX(b.step) - cx) ** 2;
+      vy += (rowY(b.row) - cy) ** 2;
+    }
+    const spreadX = Math.sqrt(vx / blots.length);
+    const spreadY = Math.sqrt(vy / blots.length);
+    const fill = Math.min(1, blots.length / (rows * 5));
+    const r = unit * (0.22 + 0.2 * fill) + Math.min(spreadX, spreadY) * 0.6;
+    const a = 0.16 + 0.22 * fill;
+    // 三團橫向（或直向）排開的霧拼成一朵橢圓的雲
+    const horizontal = spreadX >= spreadY;
+    const off = (horizontal ? spreadX : spreadY) * 0.7;
+    for (const k of [-1, 0, 1]) {
+      const x = cx + (horizontal ? k * off : 0);
+      const y = cy + (horizontal ? 0 : k * off);
+      p.haze(x, y, r * (k === 0 ? 1.15 : 0.85), theme.accent, a * (k === 0 ? 1 : 0.7));
+      p.haze(x, y, r * 0.6, pink, a * 0.35);
+    }
+  }
 
   // 每格一個小點
   p.noStroke();
-  p.fill(theme.accent, 0.45);
+  p.fill(theme.accent, 0.55);
+  const dotD = Math.max(1.5, cell * 0.075);
   for (let r = 0; r < rows; r++) {
-    for (let s = 0; s < STEPS; s++) p.circle(colX(s), rowY(r), h * 0.003);
+    for (let s = 0; s < STEPS; s++) p.circle(colX(s), rowY(r), dotD);
   }
 
-  // 墨點：印到 t 為止，落下後慢慢暈開
-  for (const hit of ctx.readings.drums) {
-    if (hit.time > t) break;
-    const q = quantize(ctx, hit.time);
-    if (!q || q.bar < firstBar || q.bar > lastBar) continue;
-    const x = colX(q.step);
-    const y = rowY(q.bar - firstBar);
+  // 墨點：落下後慢慢暈開；外圈是軟的色暈、中間一顆深一點的核
+  for (const { hit, row, step } of blots) {
+    const x = colX(step);
+    const y = rowY(row);
     const age = t - hit.time;
     const spread = 1 + 0.35 * (1 - Math.exp(-age / SPREAD_SECONDS));
-    if (hit.kind === 'kick') {
-      const d = h * (0.012 + 0.018 * hit.velocity) * size * spread;
-      p.fill(theme.accent, 0.18);
-      p.circle(x, y, d * 2.2);
-      // glow 只給剛落下的那幾滴（shadowBlur 很貴，一頁幾十滴都 glow 會掉幀）
-      const fresh = theme.glow && age < 0.3;
-      if (fresh) p.glow(theme.accent, h * 0.012);
-      p.fill(theme.accent, 0.9);
-      p.circle(x, y, d);
-      if (fresh) p.noGlow();
-    } else if (hit.kind === 'snare') {
-      const d = h * (0.008 + 0.01 * hit.velocity) * size * spread;
-      p.fill(theme.ink, 0.8);
-      p.circle(x, y, d);
-    } else {
-      p.fill(theme.mute, 0.7);
-      p.circle(x, y, h * 0.004 * size);
+    const v = 0.55 + 0.45 * hit.velocity;
+    if (hit.kind === 'hat') {
+      p.haze(x, y, cell * 0.16 * size * spread, theme.accent, 0.55 * v);
+      p.fill(theme.accent, 0.8);
+      p.circle(x, y, dotD * 1.6);
+      continue;
+    }
+    const kick = hit.kind === 'kick';
+    const d = cell * (kick ? 0.62 : 0.46) * v * size * spread;
+    const ink = kick ? pink : theme.accent;
+    p.haze(x, y, d * 0.95, ink, 0.55);
+    p.haze(x, y, d * 0.7, kick ? theme.accent : ink, 0.5);
+    p.fill(ink, 0.75);
+    p.circle(x, y, d * 0.5);
+    p.fill(dark, kick ? 0.55 : 0.3);
+    p.circle(x, y, d * 0.16);
+    // 剛落下的墨：一圈很淡的漣漪
+    if (age < 0.4) {
+      p.noFill();
+      p.stroke(ink, Math.max(1, unit * 0.0015), 1 - age / 0.4);
+      p.circle(x, y, d * (1 + age * 2.5));
+      p.noStroke();
     }
   }
 
   // 播放位置：空心圈
-  const row = pos.bar - firstBar;
+  const row = page.bar - page.firstBar;
   if (row >= 0 && row < rows) {
-    const step = Math.min(STEPS - 1, Math.floor(pos.barPhase * STEPS));
     p.noFill();
-    p.stroke(theme.accent, h * 0.001);
-    p.circle(colX(step), rowY(row), h * 0.012);
+    p.stroke(pink, Math.max(1, unit * 0.0018));
+    p.circle(colX(page.step), rowY(row), cell * 0.36);
+    p.noStroke();
   }
 
-  p.noStroke();
-  p.fill(theme.mute);
-  p.text(`bars ${firstBar}–${lastBar}`, w * 0.97, h * 0.04, {
-    size: h * 0.012,
-    font: 'mono',
-    align: 'right',
-  });
-  drawLabel(p, ctx);
+  // 列首小節號
+  p.fill(dark, 0.35);
+  const fs = Math.max(8, Math.min(cell * 0.22, unit * 0.018));
+  for (let r = 0; r < rows; r++) {
+    p.text(String(page.firstBar + r), w * LEFT * 0.42, rowY(r) - fs * 0.55, {
+      size: fs,
+      font: 'mono',
+      align: 'center',
+    });
+  }
 }
 
-/** 墨點格：16 步一小節一列，每個 hit 落下一滴墨，kick 發光暈開、snare 墨色、hat 小點。 */
+function readouts(ctx: LookContext): Readout[] {
+  const page = pageAt(ctx);
+  return [
+    { label: 'SHEET', value: `bars ${page.firstBar}–${page.lastBar}` },
+    { label: 'STEP', value: `${page.step + 1} / ${STEPS}` },
+    { label: 'BLOTS', value: String(printed(ctx, page).length) },
+  ];
+}
+
+/** 墨點格：一張淡粉的紙，16 步一小節一列，每個 hit 落下一滴暈開的墨；hit 聚在哪裡粉霧就在哪裡。 */
 export const blotLook: Look = {
   id: 'blot',
   number: 13,
@@ -109,4 +210,5 @@ export const blotLook: Look = {
   listens: ['drums', 'tempo'],
   params,
   draw,
+  readouts,
 };
