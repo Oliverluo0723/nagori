@@ -86,3 +86,17 @@ test('without a decoder, spectrum stays undefined', async () => {
   );
   if (r.ok) expect(r.readings.spectrum).toBeUndefined();
 });
+
+test('a failing decoder still loads the song, just without a spectrum (reviewer finding)', async () => {
+  const r = await loadDroppedFiles(
+    [new File([''], 'song.mp3'), new File([blob(makeMidi({ tracks: [] }))], 'song.mid')],
+    {
+      ...deps,
+      decode: async () => {
+        throw new Error('cannot decode');
+      },
+    },
+  );
+  expect(r.ok).toBe(true);
+  if (r.ok) expect(r.readings.spectrum).toBeUndefined();
+});

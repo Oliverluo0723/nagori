@@ -17,7 +17,8 @@ export function analyzeMidi(bytes: ArrayBuffer | Uint8Array, durationHint?: numb
   const roles = assignRoles(
     midi.tracks.map((t, index) => ({ index, name: t.name, channel: t.channel })),
   );
-  const duration = Math.max(durationHint ?? 0, midi.duration);
+  const hint = Number.isFinite(durationHint) ? (durationHint as number) : 0;
+  const duration = Math.max(hint, midi.duration);
 
   const drums: DrumHit[] = [];
   const bass: BassNote[] = [];

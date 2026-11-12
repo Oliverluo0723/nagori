@@ -11,8 +11,11 @@ export function detectKey(header: Header, chords: ChordEvent[]): KeyInfo | undef
   const sig = header.keySignatures[0];
   // 某些檔（或 @tonejs/midi 自己寫的檔）解析出來 key 會是 undefined，退回和弦統計
   if (sig?.key) {
-    const tonic = pcFromName(sig.key);
-    if (tonic >= 0) return info(tonic, sig.scale === 'minor' ? 'minor' : 'major');
+    // @tonejs/midi 只依升降號數量給「關係大調」的名稱：小調要往下三個半音（+9）才是主音
+    const major = pcFromName(sig.key);
+    if (major >= 0) {
+      return sig.scale === 'minor' ? info((major + 9) % 12, 'minor') : info(major, 'major');
+    }
   }
   if (chords.length === 0) return undefined;
   const count = new Array<number>(12).fill(0);

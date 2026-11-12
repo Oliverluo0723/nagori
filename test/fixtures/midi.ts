@@ -57,7 +57,12 @@ export function makeMidi(opts: MakeMidiOptions): Uint8Array {
     }
   }
   const bytes = midi.toArray();
-  if (opts.keySignature) patchKeySignature(bytes, opts.keySignature.key);
+  if (opts.keySignature) {
+    // MIDI 調號只存升降號數：小調要用關係大調（主音 +3 半音）的數量
+    const { key, scale } = opts.keySignature;
+    const major = scale === 'minor' ? MAJOR_NAME_OF_PC[(PC_OF[key] + 3) % 12] : key;
+    patchKeySignature(bytes, major);
+  }
   return bytes;
 }
 
@@ -83,6 +88,25 @@ const KEY_SHARPS: Record<string, number> = {
  * @tonejs/midi 寫 key signature 時把索引多加了 7（讀檔時又會加 7），讀回來會變 undefined。
  * 直接把 meta 事件 FF 59 02 <sharps> <scale> 的 sharps 位元組改成正確的有號值。
  */
+const PC_OF: Record<string, number> = {
+  C: 0,
+  'C#': 1,
+  Db: 1,
+  D: 2,
+  Eb: 3,
+  E: 4,
+  F: 5,
+  'F#': 6,
+  Gb: 6,
+  G: 7,
+  Ab: 8,
+  A: 9,
+  Bb: 10,
+  B: 11,
+  Cb: 11,
+};
+const MAJOR_NAME_OF_PC = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+
 function patchKeySignature(bytes: Uint8Array, key: string): void {
   const sharps = KEY_SHARPS[key];
   if (sharps === undefined) throw new Error(`unknown key ${key}`);

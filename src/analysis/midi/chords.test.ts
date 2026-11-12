@@ -53,3 +53,25 @@ test('no chord-role tracks gives an empty list', () => {
   const midi = new Midi(makeMidi({ tracks: [{ name: 'Drums', notes: [{ beat: 0, midi: 36 }] }] }));
   expect(extractChords([], buildTempoMap(midi.header), 2)).toEqual([]);
 });
+
+test('chords pressed 15 ms after the beat still change on that beat (reviewer finding)', () => {
+  const late = 0.015 * 2; // 120 bpm：1 拍 0.5 s，15 ms = 0.03 拍
+  const midi = new Midi(
+    makeMidi({
+      bpm: 120,
+      tracks: [
+        {
+          name: 'Pad',
+          notes: [
+            ...tri(0, [59, 62, 66]),
+            ...tri(4 + late, [55, 59, 62]),
+            ...tri(8 + late, [62, 66, 69]),
+          ],
+        },
+      ],
+    }),
+  );
+  const chords = extractChords(midi.tracks, buildTempoMap(midi.header), 6);
+  expect(chords.map((c) => c.name)).toEqual(['Bm', 'G', 'D']);
+  expect(chords.map((c) => c.time)).toEqual([0, 2, 4]);
+});

@@ -33,3 +33,18 @@ test('nothing to go on gives undefined', () => {
   const midi = new Midi(makeMidi({ tracks: [] }));
   expect(detectKey(midi.header, [])).toBeUndefined();
 });
+
+test('a real B-minor file (2 sharps, minor flag) parses as D/minor in tonejs and must become B minor', () => {
+  // tonejs 只依升降號數給「關係大調」的名稱：sf=2, mi=1 → { key: 'D', scale: 'minor' }
+  const midi = new Midi(makeMidi({ tracks: [] }));
+  midi.header.keySignatures.push({ ticks: 0, key: 'D', scale: 'minor' });
+  expect(detectKey(midi.header, [])).toEqual({ tonic: 11, mode: 'minor', name: 'B minor' });
+});
+
+test('fixture writes minor keys with the relative major sharps so they round-trip', () => {
+  const midi = new Midi(makeMidi({ keySignature: { key: 'B', scale: 'minor' }, tracks: [] }));
+  expect(midi.header.keySignatures[0]).toMatchObject({ key: 'D', scale: 'minor' });
+  const flat = new Midi(makeMidi({ keySignature: { key: 'D', scale: 'minor' }, tracks: [] }));
+  expect(flat.header.keySignatures[0]).toMatchObject({ key: 'F', scale: 'minor' });
+  expect(detectKey(flat.header, [])).toEqual({ tonic: 2, mode: 'minor', name: 'D minor' });
+});

@@ -55,7 +55,8 @@ test('a hit exactly between two 16th steps lands in the same step on consecutive
   const xa = hitCircles(a)[0].args[0];
   const xb = hitCircles(b)[0].args[0];
   expect(xa).toBe(xb);
-  expect([colX(0), colX(1)]).toContain(xa);
+  // Math.round(0.5) = 1：正中間固定進位到 step 1
+  expect(xa).toBeCloseTo(colX(1), 6);
 });
 
 test('rows=4 at bar 6 shows the page "bars 5–8"', () => {

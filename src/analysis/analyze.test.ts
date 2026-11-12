@@ -50,3 +50,17 @@ test('drums-only MIDI leaves chords/bass empty and key undefined', () => {
   expect(r.bass).toEqual([]);
   expect(r.key).toBeUndefined();
 });
+
+test('a non-finite duration hint is ignored and analysis terminates (reviewer finding)', () => {
+  const bytes = makeMidi({
+    bpm: 120,
+    tracks: [
+      { name: 'Pad', notes: [59, 62, 66].map((midi) => ({ beat: 0, midi, durationBeats: 4 })) },
+    ],
+  });
+  const r = analyzeMidi(bytes, Number.POSITIVE_INFINITY);
+  expect(Number.isFinite(r.duration)).toBe(true);
+  expect(r.chords).toHaveLength(1);
+  const n = analyzeMidi(bytes, Number.NaN);
+  expect(Number.isFinite(n.duration)).toBe(true);
+});

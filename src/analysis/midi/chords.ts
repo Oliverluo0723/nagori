@@ -29,16 +29,20 @@ function nameChord(pcs: number[]): { name: string; root: number } {
 export function extractChords(tracks: Track[], tempo: TempoMap, duration: number): ChordEvent[] {
   const notes = tracks.flatMap((t) => t.notes);
   if (notes.length === 0) return [];
+  // 迴圈上限：最後一個音結束，或 duration，取小的；非有限的 duration 不算數
+  const lastEnd = Math.max(...notes.map((n) => n.time + n.duration));
+  const end = Number.isFinite(duration) ? Math.min(duration, lastEnd) : lastEnd;
   const events: ChordEvent[] = [];
   let beatIndex = 0;
   let open: ChordEvent | null = null;
   for (;;) {
     const beatT = ticksToSeconds(tempo, beatIndex * tempo.ppq);
-    if (beatT >= duration) break;
-    const nextT = Math.min(duration, ticksToSeconds(tempo, (beatIndex + 1) * tempo.ppq));
-    const sounding = notes.filter(
-      (n) => n.time <= beatT + 1e-6 && beatT < n.time + n.duration - 1e-6,
-    );
+    if (beatT >= end) break;
+    const nextT = Math.min(end, ticksToSeconds(tempo, (beatIndex + 1) * tempo.ppq));
+    // 手彈的 MIDI 常比拍點晚一點：在拍點後 60 ms（或四分之一拍）處取樣，
+    // 晚按的新和弦已經進來，剛放開的舊和弦已經出去
+    const evalT = beatT + Math.min(0.06, (nextT - beatT) / 4);
+    const sounding = notes.filter((n) => n.time <= evalT && evalT < n.time + n.duration - 1e-6);
     beatIndex++;
     if (sounding.length === 0) {
       if (open) {

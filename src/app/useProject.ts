@@ -47,8 +47,13 @@ export async function loadDroppedFiles(files: File[], deps: LoadDeps): Promise<L
     const duration = await deps.getDuration(audio);
     let readings = analyzeMidi(await midi.arrayBuffer(), duration);
     if (deps.decode) {
-      const { pcm, sampleRate } = await deps.decode(audio);
-      readings = withSpectrum(readings, analyzeSpectrum(pcm, sampleRate));
+      // 頻譜是可選的：解不開音檔就不帶 spectrum，MIDI 的部分照常可用
+      try {
+        const { pcm, sampleRate } = await deps.decode(audio);
+        readings = withSpectrum(readings, analyzeSpectrum(pcm, sampleRate));
+      } catch (err) {
+        console.warn('audio decode failed; continuing without spectrum', err);
+      }
     }
     const createUrl = deps.createUrl ?? ((f: File) => URL.createObjectURL(f));
     return {
