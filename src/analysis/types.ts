@@ -89,7 +89,7 @@ export interface Readings {
   source?: ReadingsSource;
 }
 
-export type SourceKind = 'midi' | 'audio' | 'none';
+export type SourceKind = 'midi' | 'audio' | 'stem' | 'none';
 export interface ReadingsSource {
   tempo: SourceKind;
   drums: SourceKind;
