@@ -17,9 +17,17 @@ export class P5Painter implements Painter {
     return this.g.drawingContext as CanvasRenderingContext2D;
   }
 
+  /** p5 每次 color() 都要重新解析字串；同樣的顏色與 alpha 只解析一次。 */
+  private readonly colors = new Map<string, p5.Color>();
+
   private withAlpha(color: string, alpha: number | undefined): p5.Color {
+    const a = alpha === undefined ? 1 : Math.max(0, Math.min(1, alpha));
+    const key = `${color}|${a.toFixed(3)}`;
+    const hit = this.colors.get(key);
+    if (hit) return hit;
     const c = this.g.color(color);
-    if (alpha !== undefined) c.setAlpha(Math.round(Math.max(0, Math.min(1, alpha)) * 255));
+    if (alpha !== undefined) c.setAlpha(Math.round(a * 255));
+    this.colors.set(key, c);
     return c;
   }
 

@@ -1,5 +1,5 @@
 import { bandEnergy, binValue } from '../analysis/audio/spectrum';
-import { bpmAt } from '../analysis/tempo';
+import { bpmAt, timeOfBar } from '../analysis/tempo';
 import type { Spectrum, TempoMap } from '../analysis/types';
 import type { Painter } from './painter/painter';
 import type { LookContext, ParamDef } from './types';
@@ -83,4 +83,36 @@ export function drawLabel(p: Painter, ctx: LookContext): void {
     font: 'mono',
     align: 'left',
   });
+}
+
+/** 七個頻帶（低到高），名字照 Oto 的 Strata；color 是 theme.noteColors 的索引。 */
+export const BANDS7: { name: string; lo: number; hi: number; color: number }[] = [
+  { name: 'sub', lo: 30, hi: 60, color: 9 },
+  { name: 'bass', lo: 60, hi: 250, color: 8 },
+  { name: 'low-mids', lo: 250, hi: 500, color: 0 },
+  { name: 'mids', lo: 500, hi: 2000, color: 3 },
+  { name: 'high-mids', lo: 2000, hi: 4000, color: 11 },
+  { name: 'presence', lo: 4000, hi: 10000, color: 7 },
+  { name: 'air', lo: 10000, hi: 16000, color: 1 },
+];
+
+/** t 之前 seconds 秒內的平均（平滑後的「現在」）。 */
+export function smoothAt(series: Float32Array, fps: number, t: number, seconds: number): number {
+  return meanOver(series, fps, Math.max(0, t - seconds), t);
+}
+
+/** 第 1 小節起、每小節 perBar 個取樣時間，小於 limit 的全部。 */
+export function barTimes(tempo: TempoMap, limit: number, perBar: number): number[] {
+  const out: number[] = [];
+  for (let bar = 1; bar < 100000; bar++) {
+    const start = timeOfBar(tempo, bar);
+    const end = timeOfBar(tempo, bar + 1);
+    if (!(end > start)) break;
+    for (let i = 0; i < perBar; i++) {
+      const time = start + ((end - start) * i) / perBar;
+      if (time >= limit) return out;
+      out.push(time);
+    }
+  }
+  return out;
 }

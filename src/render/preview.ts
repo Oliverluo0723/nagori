@@ -22,6 +22,15 @@ export interface PreviewOptions {
   onEnded?: () => void;
 }
 
+/** 開發模式：最近 60 幀的畫圖毫秒數放在 window.__otoFrameMs，量絲滑度用。 */
+function recordFrameMs(ms: number): void {
+  const w = window as unknown as { __otoFrameMs?: number[] };
+  if (!w.__otoFrameMs) w.__otoFrameMs = [];
+  const list = w.__otoFrameMs;
+  list.push(ms);
+  if (list.length > 60) list.shift();
+}
+
 /**
  * 預覽：播放器報告時間，畫面查 Readings 畫對應那一幀。
  * 跟輸出走同一個 renderFrame，只是尺寸較小。
@@ -59,6 +68,7 @@ export function createPreview(opts: PreviewOptions): Preview {
 
   const drawFrame = () => {
     if (!composition || !readings || !surfaces) return;
+    const t0 = performance.now();
     renderFrame({
       composition,
       t: audio.currentTime,
@@ -66,6 +76,7 @@ export function createPreview(opts: PreviewOptions): Preview {
       surfaces,
       target: { w: width, h: height, ctx },
     });
+    if (import.meta.env.DEV) recordFrameMs(performance.now() - t0);
   };
 
   const loop = () => {
