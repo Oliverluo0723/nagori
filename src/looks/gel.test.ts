@@ -1,59 +1,57 @@
 import { expect, test } from 'vitest';
-import { flatSpectrum, hasText, makeCtx, opsOf, spectrumWith } from '../../test/fixtures/looks';
-import { binHz } from '../analysis/audio/spectrum';
+import { makeCtx, opsOf, spectrumWith } from '../../test/fixtures/looks';
+import type { DrumHit } from '../analysis/types';
+import { darkGlow } from '../compose/themes';
 import { gelLook } from './gel';
 import { RecordingPainter } from './painter/recording';
 import { looks } from './registry';
-import { BANDS7 } from './sheet';
+
+const W = 1080;
+const H = 1920;
+/** 120 BPM 一小節 2 秒：偶數小節全響、奇數小節安靜。 */
+const everyOtherBar = () =>
+  spectrumWith(60, (_b, f) => (Math.floor(f / 20) % 2 === 0 ? 0.9 : 0.1), { fps: 10 });
 
 test('deterministic', () => {
-  const s = flatSpectrum(60, 0.5);
   const a = new RecordingPainter();
   const b = new RecordingPainter();
-  gelLook.draw(a, makeCtx(10, { spectrum: s }));
-  gelLook.draw(b, makeCtx(10, { spectrum: s }));
+  gelLook.draw(a, makeCtx(20, { spectrum: everyOtherBar() }));
+  gelLook.draw(b, makeCtx(20, { spectrum: everyOtherBar() }));
   expect(a.ops).toEqual(b.ops);
 });
 
-test('seven lane backgrounds, print head and label even without spectrum', () => {
+test('seven full-height lanes fill the cell even before anything is printed', () => {
   const p = new RecordingPainter();
-  gelLook.draw(p, makeCtx(10, {}, { label: '18 GEL' }));
-  expect(opsOf(p, 'rect')).toHaveLength(BANDS7.length);
-  expect(opsOf(p, 'line')).toHaveLength(1);
-  expect(hasText(p, '18 GEL')).toBe(true);
+  gelLook.draw(p, makeCtx(0, {}));
+  const lanes = opsOf(p, 'rect');
+  expect(lanes).toHaveLength(7);
+  for (const r of lanes) expect(r.args[3]).toBe(H);
+  expect(lanes[0].args[0]).toBeCloseTo(0);
+  expect((lanes[6].args[0] as number) + (lanes[6].args[2] as number)).toBeCloseTo(W);
 });
 
-test('one band per half bar per lane that is above threshold, up to t', () => {
-  // 一小節 2 秒、每小節 2 條 → 1 秒一條；t = 10 → 10 條 × 7 道
+test('a band only for loud bars, printed down to t, the newest one in accent', () => {
   const p = new RecordingPainter();
-  gelLook.draw(p, makeCtx(10, { spectrum: flatSpectrum(60, 0.6) }));
-  expect(opsOf(p, 'rect')).toHaveLength(BANDS7.length + 10 * BANDS7.length);
-  // 只有 bass 頻帶有能量 → 只有一道有色帶
-  const s = spectrumWith(60, (bin) => {
-    const hz = binHz(
-      { fps: 10, bins: 16, minHz: 30, maxHz: 16000, frames: new Float32Array(), frameCount: 0 },
-      bin,
-    );
-    return hz > 60 && hz < 250 ? 1 : 0;
-  });
-  const q = new RecordingPainter();
-  gelLook.draw(q, makeCtx(10, { spectrum: s }));
-  expect(opsOf(q, 'rect')).toHaveLength(BANDS7.length + 10);
+  gelLook.draw(p, makeCtx(9, { spectrum: everyOtherBar() }));
+  // 0–9 秒：第 0、2、4 小節響（第 4 小節正在印）→ 每條泳道 3 條帶，每條帶兩個 rect（暈 + 實）以上
+  const bands = opsOf(p, 'rect').slice(7);
+  expect(bands.length).toBeGreaterThanOrEqual(7 * 3 * 2);
+  for (const r of bands) expect(r.args[1] as number).toBeLessThan((9 / 60) * H);
+  expect(opsOf(p, 'fill').map((o) => o.args[0])).toContain(darkGlow.accent);
 });
 
 test('kicks are dots in the first lane; later kicks wait', () => {
+  const drums: DrumHit[] = [
+    { time: 1, kind: 'kick', velocity: 1 },
+    { time: 2, kind: 'snare', velocity: 1 },
+    { time: 30, kind: 'kick', velocity: 1 },
+  ];
   const p = new RecordingPainter();
-  gelLook.draw(
-    p,
-    makeCtx(10, {
-      drums: [
-        { time: 1, kind: 'kick', velocity: 1 },
-        { time: 2, kind: 'snare', velocity: 1 },
-        { time: 40, kind: 'kick', velocity: 1 },
-      ],
-    }),
-  );
-  expect(opsOf(p, 'circle')).toHaveLength(1);
+  gelLook.draw(p, makeCtx(10, { drums }));
+  // 一顆 kick + 筆頭兩個圓
+  const dots = opsOf(p, 'circle');
+  expect(dots).toHaveLength(3);
+  expect(dots[0].args[0] as number).toBeLessThan(W / 7);
 });
 
 test('registry exposes gel as number 18', () => {

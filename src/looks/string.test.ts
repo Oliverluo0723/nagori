@@ -1,25 +1,13 @@
 import { expect, test } from 'vitest';
-import { tempoMapFromBpm } from '../analysis/tempo';
-import type { DrumHit, Readings } from '../analysis/types';
-import { darkGlow, paperInk } from '../compose/themes';
+import { makeCtx, opsOf } from '../../test/fixtures/looks';
+import type { DrumHit } from '../analysis/types';
+import { darkGlow } from '../compose/themes';
 import { RecordingPainter } from './painter/recording';
 import { looks } from './registry';
 import { stringLook } from './string';
-import type { LookContext } from './types';
 
-const tempo = tempoMapFromBpm(120);
-const ctx = (t: number, hits: DrumHit[], seed = 1, theme = darkGlow): LookContext => ({
-  t,
-  w: 1080,
-  h: 1920,
-  readings: { duration: 60, tempo, drums: hits, roles: [] } as Readings,
-  theme,
-  params: {},
-  seed,
-  label: '09 STRING',
-});
-const circles = (p: RecordingPainter) => p.ops.filter((o) => o.op === 'circle');
-const polylines = (p: RecordingPainter) => p.ops.filter((o) => o.op === 'polyline');
+type Pt = { x: number; y: number };
+const DUST = 110;
 
 const groove: DrumHit[] = [
   { time: 0, kind: 'kick', velocity: 1 },
@@ -32,53 +20,59 @@ test('deterministic for the same seed, different for another seed', () => {
   const a = new RecordingPainter();
   const b = new RecordingPainter();
   const c = new RecordingPainter();
-  stringLook.draw(a, ctx(2, groove));
-  stringLook.draw(b, ctx(2, groove));
-  stringLook.draw(c, ctx(2, groove, 2));
+  stringLook.draw(a, makeCtx(2, { drums: groove }));
+  stringLook.draw(b, makeCtx(2, { drums: groove }));
+  stringLook.draw(c, makeCtx(2, { drums: groove }, { seed: 2 }));
   expect(a.ops).toEqual(b.ops);
   expect(c.ops).not.toEqual(a.ops);
 });
 
 test('hats are not pins; kicks and snares are; the thread joins them in time order', () => {
   const p = new RecordingPainter();
-  stringLook.draw(p, ctx(2, groove));
-  expect(circles(p)).toHaveLength(3);
-  const thread = polylines(p);
-  const pts = thread.flatMap((o) => o.args[0] as { x: number; y: number }[]);
-  // 三根釘，線段可能切成 ink 與 accent 兩段（共用一個接點）
-  expect(pts.length).toBeGreaterThanOrEqual(3);
-  const pins = circles(p).map((o) => ({ x: o.args[0] as number, y: o.args[1] as number }));
-  expect(pts[0]).toEqual(pins[0]);
-  expect(pts[pts.length - 1]).toEqual(pins[2]);
+  stringLook.draw(p, makeCtx(2, { drums: groove }));
+  // 紙屑 + 3 根釘 + 筆頭兩個圓
+  expect(opsOf(p, 'circle')).toHaveLength(DUST + 3 + 2);
+  const threads = opsOf(p, 'polyline').map((o) => o.args[0] as Pt[]);
+  const pins = opsOf(p, 'circle').slice(DUST, DUST + 3);
+  const all = threads.flat();
+  expect(all[0]).toMatchObject({ x: pins[0].args[0], y: pins[0].args[1] });
+  // 最近兩拍（1 秒）的那段用強調色
+  expect(opsOf(p, 'stroke').map((o) => o.args[0])).toContain(darkGlow.accent);
 });
 
-test('hits after t are not drawn; empty drums still draws label', () => {
+test('hits after t are not drawn; empty drums only draws the dust', () => {
   const p = new RecordingPainter();
-  stringLook.draw(p, ctx(0.6, groove));
-  expect(circles(p)).toHaveLength(2);
-  const q = new RecordingPainter();
-  stringLook.draw(q, ctx(5, [], 1, paperInk));
-  expect(circles(q)).toHaveLength(0);
-  expect(q.ops.some((o) => o.op === 'text' && o.args[0] === '09 STRING')).toBe(true);
-  expect(q.ops.some((o) => o.op === 'glow')).toBe(false);
+  stringLook.draw(p, makeCtx(0.6, { drums: groove }));
+  expect(opsOf(p, 'circle')).toHaveLength(DUST + 2 + 2);
+  const empty = new RecordingPainter();
+  stringLook.draw(empty, makeCtx(5, { drums: [] }));
+  expect(opsOf(empty, 'circle')).toHaveLength(DUST);
+  expect(opsOf(empty, 'polyline')).toHaveLength(0);
 });
 
-test('pins stay inside the canvas', () => {
-  const p = new RecordingPainter();
-  const many: DrumHit[] = [];
-  for (let i = 0; i < 200; i++) {
-    many.push({ time: i * 0.37, kind: i % 2 ? 'kick' : 'snare', velocity: (i % 7) / 6 });
-  }
-  stringLook.draw(p, ctx(100, many));
-  for (const c of circles(p)) {
-    expect(c.args[0]).toBeGreaterThan(0);
-    expect(c.args[0]).toBeLessThan(1080);
-    expect(c.args[1]).toBeGreaterThan(0);
-    expect(c.args[1]).toBeLessThan(1920);
+test('the figure spreads to fill a tall cell and a wide cell alike', () => {
+  const hits: DrumHit[] = [];
+  for (let i = 0; i < 64; i++)
+    hits.push({ time: i * 0.25, kind: i % 2 ? 'snare' : 'kick', velocity: 1 });
+  for (const [w, h] of [
+    [1080, 1920],
+    [960, 480],
+  ]) {
+    const p = new RecordingPainter();
+    stringLook.draw(p, makeCtx(20, { drums: hits }, { w, h }));
+    const pins = opsOf(p, 'circle').slice(DUST);
+    const xs = pins.map((o) => o.args[0] as number);
+    const ys = pins.map((o) => o.args[1] as number);
+    for (const x of xs) expect(x).toBeGreaterThanOrEqual(0);
+    for (const x of xs) expect(x).toBeLessThanOrEqual(w);
+    for (const y of ys) expect(y).toBeGreaterThanOrEqual(0);
+    for (const y of ys) expect(y).toBeLessThanOrEqual(h);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(h * 0.5);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(w * 0.5);
   }
 });
 
 test('registry exposes string as number 9', () => {
   expect(looks.string).toBe(stringLook);
-  expect(stringLook).toMatchObject({ id: 'string', number: 9, listens: ['drums', 'tempo'] });
+  expect(stringLook).toMatchObject({ id: 'string', number: 9 });
 });

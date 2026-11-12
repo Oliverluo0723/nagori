@@ -1,92 +1,61 @@
 import { expect, test } from 'vitest';
-import { tempoMapFromBpm } from '../analysis/tempo';
-import type { Readings, Spectrum } from '../analysis/types';
-import { darkGlow, paperInk } from '../compose/themes';
+import { makeCtx, opsOf, spectrumWith } from '../../test/fixtures/looks';
+import { darkGlow } from '../compose/themes';
 import { coronaLook } from './corona';
 import { RecordingPainter } from './painter/recording';
 import { looks } from './registry';
-import type { LookContext } from './types';
 
-const tempo = tempoMapFromBpm(120); // 半拍 0.25 秒
-const BINS = 8;
-function flat(seconds: number, value: number, fps = 20): Spectrum {
-  const frameCount = seconds * fps;
-  return {
-    fps,
-    bins: BINS,
-    minHz: 30,
-    maxHz: 16000,
-    frames: new Float32Array(frameCount * BINS).fill(value),
-    frameCount,
-  };
-}
+type Pt = { x: number; y: number };
 const W = 1080;
 const H = 1920;
-const ctx = (t: number, s?: Spectrum, theme = darkGlow): LookContext => ({
-  t,
-  w: W,
-  h: H,
-  readings: { duration: 40, tempo, drums: [], roles: [], spectrum: s } as Readings,
-  theme,
-  params: {},
-  seed: 1,
-  label: '11 CORONA',
-});
-const strokeColorAt = (p: RecordingPainter, index: number) => {
-  let color: unknown;
-  for (let i = 0; i < index; i++) if (p.ops[i].op === 'stroke') color = p.ops[i].args[0];
-  return color;
-};
+const radius = (pt: Pt) => Math.hypot(pt.x - W / 2, pt.y - H / 2);
+/** 音量從 0 爬到 1 的頻譜。 */
+const ramp = () => spectrumWith(60, (_b, f) => f / 600, { fps: 10 });
 
 test('deterministic', () => {
   const a = new RecordingPainter();
   const b = new RecordingPainter();
-  coronaLook.draw(a, ctx(4, flat(40, 0.5)));
-  coronaLook.draw(b, ctx(4, flat(40, 0.5)));
+  coronaLook.draw(a, makeCtx(20, { spectrum: ramp() }));
+  coronaLook.draw(b, makeCtx(20, { spectrum: ramp() }));
   expect(a.ops).toEqual(b.ops);
 });
 
-test('without spectrum: three inner rings and the label, no rays', () => {
+test('without spectrum: outer guide and three inner rings, no rays', () => {
   const p = new RecordingPainter();
-  coronaLook.draw(p, ctx(4, undefined, paperInk));
-  expect(p.ops.filter((o) => o.op === 'circle')).toHaveLength(3);
-  expect(p.ops.filter((o) => o.op === 'line')).toHaveLength(0);
-  expect(p.ops.some((o) => o.op === 'text' && o.args[0] === '11 CORONA')).toBe(true);
-  expect(p.ops.some((o) => o.op === 'glow')).toBe(false);
+  coronaLook.draw(p, makeCtx(10, {}));
+  expect(opsOf(p, 'circle')).toHaveLength(4);
+  expect(opsOf(p, 'shape')).toHaveLength(0);
 });
 
-test('one accent ray per half beat up to t, starting on the inner ring', () => {
+test('rays fill the ring out to the edge of the cell, but only up to t', () => {
   const p = new RecordingPainter();
-  coronaLook.draw(p, ctx(4, flat(40, 0.5)));
-  const lines = p.ops.filter((o) => o.op === 'line');
-  const accentRays = lines.filter((o) => strokeColorAt(p, p.ops.indexOf(o)) === darkGlow.accent);
-  // t = 4 秒 → 0, 0.25 … 3.75 共 16 根：15 根強調色加 1 根墨色指針
-  expect(accentRays).toHaveLength(15);
-  const [x1, y1] = accentRays[0].args as number[];
-  const r = Math.hypot(x1 - W / 2, y1 - H / 2);
-  const inner = Math.min(W, H) * 0.14;
-  expect(r).toBeCloseTo(inner, 0);
-  // 最新那根是墨色指針，從內圈裡面伸出來（高頻射線也是墨色，但從內圈起）
-  const needle = lines[lines.length - 1];
-  expect(strokeColorAt(p, p.ops.indexOf(needle))).toBe(darkGlow.ink);
-  const [nx, ny] = needle.args as number[];
-  expect(Math.hypot(nx - W / 2, ny - H / 2)).toBeCloseTo(inner * 0.6, 0);
+  coronaLook.draw(p, makeCtx(30, { spectrum: ramp() }));
+  const pts = opsOf(p, 'shape').flatMap((o) => o.args[0] as Pt[]);
+  expect(pts.length).toBeGreaterThan(100);
+  const rs = pts.map(radius);
+  expect(Math.max(...rs)).toBeLessThanOrEqual(W * 0.49 + 1e-6);
+  // 只印到半圈：12 點鐘順時針到 6 點鐘，全部在右半邊
+  for (const pt of pts) expect(pt.x).toBeGreaterThanOrEqual(W / 2 - 1);
+  // 正在印的那根是墨色、有筆頭
+  expect(opsOf(p, 'stroke').map((o) => o.args[0])).toContain(darkGlow.ink);
 });
 
 test('louder makes longer rays', () => {
-  const quiet = new RecordingPainter();
-  const loud = new RecordingPainter();
-  coronaLook.draw(quiet, ctx(1, flat(40, 0.2)));
-  coronaLook.draw(loud, ctx(1, flat(40, 0.8)));
-  const len = (p: RecordingPainter) => {
-    const o = p.ops.find((o) => o.op === 'line');
-    const [x1, y1, x2, y2] = (o?.args ?? [0, 0, 0, 0]) as number[];
-    return Math.hypot(x2 - x1, y2 - y1);
-  };
-  expect(len(loud)).toBeGreaterThan(len(quiet));
+  const p = new RecordingPainter();
+  coronaLook.draw(p, makeCtx(59.9, { spectrum: ramp() }));
+  let fill: unknown;
+  let main: Pt[] = [];
+  for (const o of p.ops) {
+    if (o.op === 'fill') fill = o.args[0];
+    if (o.op === 'shape' && fill === darkGlow.accent) main = o.args[0] as Pt[];
+  }
+  // 每根 4 點：內、外、外、內；取早段與晚段的外點
+  const early = radius(main[4 * 10 + 1]);
+  const late = radius(main[main.length - 4 * 10 + 1]);
+  expect(late).toBeGreaterThan(early + W * 0.1);
 });
 
 test('registry exposes corona as number 11', () => {
   expect(looks.corona).toBe(coronaLook);
-  expect(coronaLook).toMatchObject({ id: 'corona', number: 11, listens: ['spectrum', 'tempo'] });
+  expect(coronaLook).toMatchObject({ id: 'corona', number: 11 });
 });

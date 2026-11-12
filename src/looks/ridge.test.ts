@@ -1,89 +1,81 @@
 import { expect, test } from 'vitest';
-import { tempoMapFromBpm } from '../analysis/tempo';
-import type { Readings, Spectrum } from '../analysis/types';
+import { flatSpectrum, hasText, makeCtx, opsOf, spectrumWith } from '../../test/fixtures/looks';
 import { darkGlow, paperInk } from '../compose/themes';
+import type { PaintOp } from './painter/recording';
 import { RecordingPainter } from './painter/recording';
 import { looks } from './registry';
 import { ridgeLook } from './ridge';
-import type { LookContext } from './types';
 
-const BINS = 8;
-const tempo = tempoMapFromBpm(120);
-
-/** 每秒 fps 幀、全部同一列值的頻譜。 */
-function flatSpectrum(seconds: number, value: number, fps = 10): Spectrum {
-  const frameCount = seconds * fps;
-  const frames = new Float32Array(frameCount * BINS).fill(value);
-  return { fps, bins: BINS, minHz: 30, maxHz: 16000, frames, frameCount };
-}
-
-const ctx = (
-  t: number,
-  s?: Spectrum,
-  params: Record<string, number> = {},
-  theme = darkGlow,
-): LookContext => ({
-  t,
-  w: 1080,
-  h: 1920,
-  readings: { duration: 60, tempo, drums: [], roles: [], spectrum: s } as Readings,
-  theme,
-  params,
-  seed: 1,
-  label: '07 RIDGE',
-});
-
-const polylines = (p: RecordingPainter) => p.ops.filter((o) => o.op === 'polyline');
-const strokeBefore = (p: RecordingPainter, index: number) => {
+type Pt = { x: number; y: number };
+const strokeBefore = (p: RecordingPainter, op: PaintOp) => {
   let color: unknown;
-  for (let i = 0; i < index; i++) if (p.ops[i].op === 'stroke') color = p.ops[i].args[0];
+  for (const o of p.ops) {
+    if (o === op) return color;
+    if (o.op === 'stroke') color = o.args[0];
+  }
   return color;
 };
+/** 前 30 秒全靜音、後 30 秒每個 bin 都滿。 */
+const halfLoud = () => spectrumWith(60, (_b, f) => (f >= 300 ? 1 : 0), { fps: 10, bins: 16 });
 
 test('deterministic', () => {
   const a = new RecordingPainter();
   const b = new RecordingPainter();
-  ridgeLook.draw(a, ctx(12, flatSpectrum(60, 0.5)));
-  ridgeLook.draw(b, ctx(12, flatSpectrum(60, 0.5)));
+  ridgeLook.draw(a, makeCtx(12, { spectrum: halfLoud() }));
+  ridgeLook.draw(b, makeCtx(12, { spectrum: halfLoud() }));
   expect(a.ops).toEqual(b.ops);
 });
 
-test('without spectrum: background, label and Hz ticks, no ridge lines', () => {
+test('without spectrum: Hz ticks and the whole sheet of faint baselines, no ridge lines', () => {
   const p = new RecordingPainter();
-  ridgeLook.draw(p, ctx(5, undefined, {}, paperInk));
+  ridgeLook.draw(p, makeCtx(5, {}, { theme: paperInk }));
   expect(p.ops[0]).toEqual({ op: 'background', args: [paperInk.paper] });
-  expect(p.ops.some((o) => o.op === 'text' && o.args[0] === '07 RIDGE')).toBe(true);
-  expect(p.ops.some((o) => o.op === 'text' && o.args[0] === '1k')).toBe(true);
-  expect(polylines(p)).toHaveLength(0);
-  expect(p.ops.some((o) => o.op === 'glow')).toBe(false);
+  expect(hasText(p, '1k')).toBe(true);
+  expect(hasText(p, '0:00')).toBe(true);
+  expect(opsOf(p, 'polyline')).toHaveLength(0);
+  // 幾十列淡基線，一路鋪到格子底部
+  const lines = opsOf(p, 'line');
+  expect(lines.length).toBeGreaterThan(60);
+  const ys = lines.map((l) => l.args[1] as number);
+  expect(Math.max(...ys)).toBeGreaterThan(1920 * 0.9);
+  expect(Math.min(...ys)).toBeLessThan(1920 * 0.15);
 });
 
-test('rows printed up to t: finished rows in ink, current row in accent, later rows absent', () => {
+test('rows printed up to t: finished rows in ink, the current row in accent with the pen', () => {
   const p = new RecordingPainter();
-  // 60 秒切 6 列，每列 10 秒；t = 15 在第 2 列中間
-  ridgeLook.draw(p, ctx(15, flatSpectrum(60, 0.5), { rows: 6 }));
-  const lines = polylines(p);
-  expect(lines).toHaveLength(2);
-  const idx = lines.map((l) => p.ops.indexOf(l));
-  expect(strokeBefore(p, idx[0])).toBe(darkGlow.ink);
-  expect(strokeBefore(p, idx[1])).toBe(darkGlow.accent);
-  // 每列的點數 = bins，x 由左到右遞增
-  const pts = lines[0].args[0] as { x: number; y: number }[];
-  expect(pts).toHaveLength(BINS);
+  ridgeLook.draw(p, makeCtx(30, { spectrum: flatSpectrum(60, 0.5) }));
+  const lines = opsOf(p, 'polyline');
+  // 已印列數 + 未印基線（扣掉 Hz 軸那條）= 總列數；t = 30 是一半
+  const rows = lines.length + opsOf(p, 'line').length - 1;
+  expect(lines.length).toBeGreaterThan(rows * 0.45);
+  expect(lines.length).toBeLessThan(rows * 0.55);
+  expect(strokeBefore(p, lines[0])).toBe(darkGlow.ink);
+  expect(strokeBefore(p, lines[lines.length - 1])).toBe(darkGlow.accent);
+  // 每列 = 左端 + bins + 右端，x 由左到右遞增
+  const pts = lines[0].args[0] as Pt[];
+  expect(pts).toHaveLength(16 + 2);
   for (let i = 1; i < pts.length; i++) expect(pts[i].x).toBeGreaterThan(pts[i - 1].x);
-  // 時間標籤：第 1 列 0:00、第 2 列 0:10
-  expect(p.ops.some((o) => o.op === 'text' && o.args[0] === '0:00')).toBe(true);
-  expect(p.ops.some((o) => o.op === 'text' && o.args[0] === '0:10')).toBe(true);
+  // 筆頭：環 + 中心點
+  expect(opsOf(p, 'circle').length).toBeGreaterThanOrEqual(2);
 });
 
-test('louder rows rise higher; silence sits on the baseline', () => {
-  const quiet = new RecordingPainter();
-  const loud = new RecordingPainter();
-  ridgeLook.draw(quiet, ctx(5, flatSpectrum(60, 0), { rows: 6 }));
-  ridgeLook.draw(loud, ctx(5, flatSpectrum(60, 1), { rows: 6 }));
-  const yq = (polylines(quiet)[0].args[0] as { y: number }[])[0].y;
-  const yl = (polylines(loud)[0].args[0] as { y: number }[])[0].y;
-  expect(yl).toBeLessThan(yq);
+test('silent rows sit on their baseline; loud rows rise above it', () => {
+  const p = new RecordingPainter();
+  ridgeLook.draw(p, makeCtx(59, { spectrum: halfLoud() }));
+  const lines = opsOf(p, 'polyline').map((l) => l.args[0] as Pt[]);
+  const silent = lines[0];
+  for (const pt of silent) expect(pt.y).toBeCloseTo(silent[0].y);
+  const loud = lines[lines.length - 2];
+  expect(Math.min(...loud.map((pt) => pt.y))).toBeLessThan(loud[0].y - 10);
+});
+
+test('fills a square cell too', () => {
+  const p = new RecordingPainter();
+  ridgeLook.draw(p, makeCtx(59, { spectrum: halfLoud() }, { w: 900, h: 800 }));
+  const pts = opsOf(p, 'polyline').flatMap((l) => l.args[0] as Pt[]);
+  expect(Math.min(...pts.map((pt) => pt.y))).toBeGreaterThanOrEqual(0);
+  expect(Math.max(...pts.map((pt) => pt.y))).toBeGreaterThan(800 * 0.85);
+  expect(Math.max(...pts.map((pt) => pt.x))).toBeCloseTo(900);
 });
 
 test('registry exposes ridge as number 7', () => {
