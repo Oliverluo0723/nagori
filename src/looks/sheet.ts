@@ -2,6 +2,7 @@ import { bandEnergy, binValue } from '../analysis/audio/spectrum';
 import { bpmAt, timeOfBar } from '../analysis/tempo';
 import type { Spectrum, TempoMap } from '../analysis/types';
 import type { Painter } from './painter/painter';
+import { mulberry32 } from './prng';
 import type { LookContext, ParamDef } from './types';
 
 /**
@@ -115,4 +116,50 @@ export function barTimes(tempo: TempoMap, limit: number, perBar: number): number
     }
   }
   return out;
+}
+
+/** 固定節奏的「發射時刻」：第 k 個 tick 的秒數是 k / rate。回傳 [t − life, t] 之間的 tick 索引（含）。 */
+export function ticksAlive(t: number, rate: number, life: number): [number, number] {
+  const last = Math.floor(t * rate);
+  const first = Math.max(0, Math.floor((t - life) * rate) + 1);
+  return [first, last];
+}
+
+/** 給 (seed, k) 一個獨立的亂數序列；同一組永遠一樣。 */
+export function rngFor(seed: number, k: number): () => number {
+  return mulberry32((seed + Math.imul(k + 1, 0x9e3779b1)) >>> 0);
+}
+
+/** bass 音高的顯示範圍（跟 Glide 一樣，上下各留 2 個半音）。 */
+export function pitchRange(bass: { midi: number }[]): [number, number] {
+  if (bass.length === 0) return [24, 48];
+  let lo = Number.POSITIVE_INFINITY;
+  let hi = Number.NEGATIVE_INFINITY;
+  for (const n of bass) {
+    lo = Math.min(lo, n.midi);
+    hi = Math.max(hi, n.midi);
+  }
+  return [lo - 2, hi + 2];
+}
+
+/** t 當下正在響的 bass 音（含 bend 後的音高）；沒有就 null。hold 為 true 時回最近一個已開始的音（音與音之間保持）。 */
+export function bassAt(
+  bass: {
+    time: number;
+    duration: number;
+    midi: number;
+    bends: { time: number; semitones: number }[];
+  }[],
+  t: number,
+  hold = false,
+): { midi: number; start: number } | null {
+  let held: { midi: number; start: number } | null = null;
+  for (const n of bass) {
+    if (n.time > t) break;
+    let midi = n.midi;
+    for (const b of n.bends) if (b.time <= t) midi = n.midi + b.semitones;
+    if (t < n.time + n.duration) return { midi, start: n.time };
+    held = { midi, start: n.time };
+  }
+  return hold ? held : null;
 }
