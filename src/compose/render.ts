@@ -153,7 +153,8 @@ export function renderFrame(opts: RenderFrameOptions): void {
     if (video && !video.lookOnTop) continue;
     const look = looks[cell.lookId];
     if (!look) throw new Error(`unknown look: ${cell.lookId}`);
-    const layout = frameLayout(rect.w, rect.h, withTitle);
+    // 最小字級以 1080 寬的輸出為準；預覽較小時等比縮，預覽與輸出看起來一樣
+    const layout = frameLayout(rect.w, rect.h, withTitle, target.w / 1080);
     const { plot } = layout;
     // look 只看得到繪圖框：它的 w/h 就是框的大小，標籤改由外框畫
     const surface = surfaces.get(cell.id, plot.w, plot.h);
