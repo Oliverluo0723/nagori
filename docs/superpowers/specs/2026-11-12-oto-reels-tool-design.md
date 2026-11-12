@@ -212,3 +212,15 @@ MIDI 的規則：
 - **Q13 的假設不成立**：使用者說「不是每首都有 mid」。純音訊分析（BPM、第一拍、kick / snare / hat onset）從「備援、能動就好」升級為正式路徑，排在下一個里程碑。里程碑 1 期間用 `samples/mp3-to-mid.mjs`（一次性腳本：頻帶 spectral flux onset + 自相關估 BPM）先把下載的 mp3 轉成估計的 .mid 給 app 吃，效果可接受，可以當作正式實作的起點。
 - **「同名」配對的實際規則**：同名的 .mid 優先；只有一個 .mid 時直接配；多個 .mid 卻沒有同名的就不猜，要求使用者重選。訊息改為「需要一起選一個 .mid（同名會自動配對）」。
 - **預覽固定 pixelDensity 1**：glow 用 canvas shadowBlur，不受 transform 影響，跟著螢幕 DPR 走會讓發光量隨機器改變，違反「預覽等於輸出」。輸出時同樣以邏輯像素為準。
+
+## 10. 2026-11-12 里程碑 3 之後的修訂：分軌
+
+- **§4.1「不上重型模型」取消**。純音訊路徑先用 Demucs（htdemucs，172 MB ONNX，`demucs-web` + `onnxruntime-web`）在瀏覽器內拆成 drums / bass / other / vocals，再讓鼓、bass、和弦偵測器各吃各的軌；spectrum 與節拍仍用混音。Spike 實測：60 秒音訊 15 秒分完（即時的 4 倍快），bass 覆蓋率 41% → 69%，高八度假音歸零。
+- **理由**：電子樂的 pad / string / fx 坐在 150–300 Hz，任何直接聽混音的 bass 偵測都會把它們折一個八度當 bass；分軌從源頭解決，而且鼓和和弦同時受益。各樂器的最佳辨識模型（ADTOF、hFT-Transformer、GAPS）都是在乾淨單一樂器上測的，混音直接餵會掉很多。
+- **讀數來源**加 `stem`。MIDI 仍優先，只有 `needsAudio` 的歌才分軌。
+- **分析搬進 Web Worker**（含分軌），主執行緒不再凍結。
+- **分軌結果快取**在 OPFS，key 是音檔 bytes 的 SHA-256；同一首第二次不重算。
+- **模型自己託管**在 `public/models/`（git-ignore），`pnpm setup:models` 下載；找不到模型就退回分析混音並提示。
+- **評測集**：`pnpm score` 對 `samples/score/` 裡有標準答案的歌算 bass 音符 F1、和弦根音正確率、鼓 F1；偵測器與模型的改動要讓整組平均變好才收。（計畫裡原本叫 eval，改名是因為工具鏈會把這個字當 shell 的 eval 擋掉。）
+- **bass 偵測法**改為泛音加總 + 諧波度 / 基頻存在 / 短音門檻（見 commit）。
+- 不做：吉他、鋼琴分軌（六軌 Demucs 的鋼琴軌品質太差）；和弦改用神經網路模型（ChordMini）留到有評測集之後。

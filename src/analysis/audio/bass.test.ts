@@ -27,10 +27,62 @@ test('a constant bass of midi 40 without drums gives only 40s', () => {
   for (const n of notes) expect(n.midi).toBe(40);
 });
 
+test('a low constant bass of midi 31 (49 Hz, one FFT bin per semitone) is not read flat', () => {
+  const notes = detectBass(
+    synthBeat({ bars: 2, drums: false, bass: [31, 31, 31, 31], chords: [[]] }),
+    SR,
+  );
+  expect(notes.length).toBeGreaterThan(0);
+  for (const n of notes) expect(n.midi, `note at ${n.time.toFixed(2)}`).toBe(31);
+});
+
 test('silence gives no notes; frames report null pitch (review focus 3)', () => {
   const silent = new Float32Array(SR * 3);
   expect(detectBass(silent, SR)).toEqual([]);
   const frames = bassPitchFrames(silent, SR);
   expect(frames.length).toBeGreaterThan(0);
   expect(frames.every((f) => f.midi === null)).toBe(true);
+});
+
+/** KILL LOVE 的 bass：基音比第 2、3 泛音弱約 10 dB（失真 bass／808 常見），最強的是 2f、3f */
+const WEAK_FUNDAMENTAL = [0.25, 0.8, 0.6, 0.35, 0.2];
+
+test('weak fundamental: right octave and no fifths (no 2f / 3f picks)', () => {
+  const pcm = synthBeat({ bars: 4, bassPartials: WEAK_FUNDAMENTAL });
+  const notes = detectBass(pcm, SR);
+  const expected = [35, 31, 38, 33];
+  let right = 0;
+  let total = 0;
+  for (const n of notes) {
+    const bar = Math.min(3, Math.floor((n.time + 0.16) / 2));
+    total += n.duration;
+    if (n.midi === expected[bar]) right += n.duration;
+  }
+  expect(total).toBeGreaterThan(0);
+  expect(right / total).toBeGreaterThan(0.9);
+});
+
+test('weak fundamental: bass is found for most of each beat (coverage)', () => {
+  const pcm = synthBeat({ bars: 4, bassPartials: WEAK_FUNDAMENTAL });
+  const notes = detectBass(pcm, SR);
+  const covered = notes.reduce(
+    (s, n) => s + Math.min(n.time + n.duration, 8) - Math.max(n.time, 0),
+    0,
+  );
+  // bass 每拍 0.5 s 都有聲音，但後段衰減到 −14 dB；至少要蓋到 60%
+  expect(covered / 8).toBeGreaterThan(0.6);
+});
+
+test('pad only (no bass, no drums) gives no notes: a chord at B3–A4 must not be reported an octave down', () => {
+  const notes = detectBass(synthBeat({ bars: 4, bassPartials: [], drums: false }), SR);
+  expect(notes.map((n) => `${n.time.toFixed(2)}:${n.midi}`)).toEqual([]);
+});
+
+test('pad + drums, no bass: nothing longer than a kick tail, and never the pad an octave down', () => {
+  const notes = detectBass(synthBeat({ bars: 4, bassPartials: [] }), SR);
+  // 合成的 kick 是掃到 50 Hz 的正弦波，尾巴本身就是 G1，短短的可以接受
+  for (const n of notes) {
+    expect(n.duration, `note at ${n.time.toFixed(2)}`).toBeLessThan(0.2);
+    expect([43, 47, 50, 54], `pad an octave down at ${n.time.toFixed(2)}`).not.toContain(n.midi);
+  }
 });

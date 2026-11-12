@@ -206,6 +206,12 @@ button {
   margin: 8px 0 0;
 }
 
+.note {
+  color: var(--muted);
+  font-size: 11px;
+  margin: 6px 0 0;
+}
+
 details.tune summary {
   cursor: pointer;
   list-style: none;

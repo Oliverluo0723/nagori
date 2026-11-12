@@ -4,3 +4,6 @@ dist
 .superpowers/
 .claude/
 samples/
+samples
+public/models/
+score/last-run.md

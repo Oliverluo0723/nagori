@@ -7,6 +7,8 @@ export interface SynthOptions {
   drums?: boolean;
   /** 每小節的 bass midi，依小節輪替 */
   bass?: number[];
+  /** bass 第 1、2、3… 泛音的振幅；預設 [0.8, 0.25]（基音很強） */
+  bassPartials?: number[];
   /** 每小節的三和弦 midi，依小節輪替 */
   chords?: number[][];
   /** 開頭靜音秒數 */
@@ -19,6 +21,7 @@ const DEFAULTS = {
   sampleRate: 44100,
   drums: true,
   bass: [35, 31, 38, 33],
+  bassPartials: [0.8, 0.25],
   chords: [
     [59, 62, 66],
     [55, 59, 62],
@@ -100,12 +103,10 @@ export function synthBeat(opts: SynthOptions = {}): Float32Array {
       const t0 = o.leadIn + (bar * 4 + b) * beat;
       add(t0, beat, (t) => {
         const env = Math.min(1, t * 200) * Math.exp(-t * 2.5);
-        return (
-          (Math.sin(2 * Math.PI * hz(bassMidi) * t) * 0.8 +
-            Math.sin(2 * Math.PI * hz(bassMidi) * 2 * t) * 0.25) *
-          env *
-          0.35
-        );
+        let s = 0;
+        for (let h = 0; h < o.bassPartials.length; h++)
+          s += Math.sin(2 * Math.PI * hz(bassMidi) * (h + 1) * t) * o.bassPartials[h];
+        return s * env * 0.35;
       });
     }
     const chord = o.chords[bar % o.chords.length];

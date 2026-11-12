@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Stage } from '../analysis/analyzeAudio';
 import { bpmAt } from '../analysis/tempo';
+import type { SourceKind } from '../analysis/types';
 import { themes } from '../compose/themes';
 import type { Composition } from '../compose/types';
 import { looks } from '../looks/registry';
@@ -48,10 +49,19 @@ const ERROR_TEXT = {
   'need-audio': '需要音檔',
   'parse-failed': '解析失敗',
   'no-beat': '分析不到節拍',
+  aborted: '已取消',
 } as const;
+
+const SOURCE_TEXT: Record<SourceKind, string> = {
+  midi: 'MIDI',
+  audio: '音訊',
+  stem: '分軌',
+  none: '無',
+};
 
 const STAGE_TEXT: Record<Stage, string> = {
   decode: '解碼音檔',
+  separate: '分軌（第一次約一分鐘）',
   spectrum: '算頻譜',
   rhythm: '找節拍',
   drums: '找鼓點',
@@ -257,10 +267,15 @@ export function App() {
             {ready.readings.source && (
               <p className="source">
                 {Object.entries(ready.readings.source)
-                  .map(([k, v]) => `${k}:${v}`)
+                  .map(([k, v]) => `${k}:${SOURCE_TEXT[v as SourceKind]}`)
                   .join('  ')}
               </p>
             )}
+            {ready.notes.map((n) => (
+              <p key={n} className="note">
+                {n}
+              </p>
+            ))}
           </section>
         )}
 

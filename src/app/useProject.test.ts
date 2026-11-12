@@ -1,5 +1,9 @@
 import { expect, test } from 'vitest';
 import { makeMidi } from '../../test/fixtures/midi';
+import { MemoryStemStore, stemKey } from '../analysis/stems/cache';
+import type { Stems } from '../analysis/stems/types';
+import type { Readings } from '../analysis/types';
+import { type AnalyzeFn, type AnalyzeInput, analyzeInline } from '../analysis/workerClient';
 import { loadDroppedFiles } from './useProject';
 
 const blob = (u: Uint8Array) =>
@@ -7,7 +11,7 @@ const blob = (u: Uint8Array) =>
 
 const deps = { getDuration: async () => 30, createUrl: () => 'blob:x' };
 
-const fakeAudio = async (pcm: Float32Array, sampleRate: number) => ({
+const fakeReadings = (pcm: Float32Array, sampleRate: number): Readings => ({
   duration: pcm.length / sampleRate,
   tempo: { ppq: 480, tempos: [{ ticks: 0, bpm: 100 }], timeSignatures: [], offset: 0.1 },
   drums: [{ time: 0, kind: 'kick' as const, velocity: 1 }],
@@ -23,10 +27,19 @@ const fakeAudio = async (pcm: Float32Array, sampleRate: number) => ({
   },
 });
 
+const fakeAudio: AnalyzeFn = async (input) => fakeReadings(input.pcm, input.sampleRate);
+
+const fakeDecode = async () => ({ pcm: new Float32Array(44100), sampleRate: 44100 });
+
+function fakeStems(n = 8): Stems {
+  const z = new Float32Array(n);
+  return { sampleRate: 44100, drums: z, bass: z, other: z, vocals: z };
+}
+
 test('mp3 without mid → analysed from audio', async () => {
   const r = await loadDroppedFiles([new File([''], 'song.mp3')], {
     ...deps,
-    decode: async () => ({ pcm: new Float32Array(44100), sampleRate: 44100 }),
+    decode: fakeDecode,
     analyze: fakeAudio,
   });
   expect(r.ok).toBe(true);
@@ -41,9 +54,9 @@ test('mp3 without mid and without a decoder → parse-failed', async () => {
 test('audio analysis finds no beat → no-beat', async () => {
   const r = await loadDroppedFiles([new File([''], 'song.mp3')], {
     ...deps,
-    decode: async () => ({ pcm: new Float32Array(44100), sampleRate: 44100 }),
-    analyze: async (pcm, sr) => ({
-      ...(await fakeAudio(pcm, sr)),
+    decode: fakeDecode,
+    analyze: async (input) => ({
+      ...fakeReadings(input.pcm, input.sampleRate),
       source: { tempo: 'none', drums: 'none', chords: 'none', bass: 'none', key: 'none' },
     }),
   });
@@ -111,7 +124,13 @@ test('with a decoder, readings carry a spectrum (1 s → 50 frames)', async () =
   for (let i = 0; i < sr; i++) pcm[i] = Math.sin((2 * Math.PI * 440 * i) / sr) * 0.5;
   const r = await loadDroppedFiles(
     [new File([''], 'song.mp3'), new File([blob(makeMidi({ tracks: [] }))], 'song.mid')],
-    { ...deps, decode: async () => ({ pcm, sampleRate: sr }) },
+    // 真的跑 analyzeAudio（要拿 spectrum），但 Node 裡不分軌
+    {
+      ...deps,
+      decode: async () => ({ pcm, sampleRate: sr }),
+      separate: false,
+      stemStore: new MemoryStemStore(),
+    },
   );
   expect(r.ok).toBe(true);
   if (r.ok) expect(r.readings.spectrum?.frameCount).toBe(50);
@@ -138,3 +157,217 @@ test('a failing decoder still loads the song, just without a spectrum (reviewer 
   expect(r.ok).toBe(true);
   if (r.ok) expect(r.readings.spectrum).toBeUndefined();
 });
+
+// ---- 分軌（里程碑 5） ----
+
+test('needsAudio → analyze gets separate=true and stems are cached under the file hash', async () => {
+  const store = new MemoryStemStore();
+  const inputs: AnalyzeInput[] = [];
+  const stems = fakeStems();
+  const analyze: AnalyzeFn = async (input, _p, onStems) => {
+    inputs.push(input);
+    onStems?.(stems);
+    return fakeReadings(input.pcm, input.sampleRate);
+  };
+  const r = await loadDroppedFiles([new File(['abc'], 'song.mp3')], {
+    ...deps,
+    decode: fakeDecode,
+    analyze,
+    stemStore: store,
+  });
+  expect(r.ok).toBe(true);
+  expect(inputs).toHaveLength(1);
+  expect(inputs[0].separate).toBe(true);
+  expect(inputs[0].stems).toBeUndefined();
+  // 沒給 left/right 時拿 pcm 當左右
+  expect(inputs[0].left).toBe(inputs[0].pcm);
+  expect(inputs[0].right).toBe(inputs[0].pcm);
+  const key = await stemKey(new TextEncoder().encode('abc').buffer as ArrayBuffer);
+  expect(await store.get(key)).toBe(stems);
+});
+
+test('cache hit skips separation (review focus 2)', async () => {
+  const store = new MemoryStemStore();
+  const stems = fakeStems();
+  await store.put(await stemKey(new TextEncoder().encode('abc').buffer as ArrayBuffer), stems);
+  const inputs: AnalyzeInput[] = [];
+  const analyze: AnalyzeFn = async (input) => {
+    inputs.push(input);
+    return fakeReadings(input.pcm, input.sampleRate);
+  };
+  await loadDroppedFiles([new File(['abc'], 'song.mp3')], {
+    ...deps,
+    decode: fakeDecode,
+    analyze,
+    stemStore: store,
+  });
+  expect(inputs[0]).toMatchObject({ separate: false, stems });
+});
+
+test('separation unavailable → falls back to mix analysis with a note (review focus 1)', async () => {
+  // analyze 要分軌卻沒回報 stems、來源也不是 stem：分軌沒成功
+  const r = await loadDroppedFiles([new File(['abc'], 'song.mp3')], {
+    ...deps,
+    decode: fakeDecode,
+    analyze: fakeAudio,
+    stemStore: new MemoryStemStore(),
+  });
+  expect(r.ok).toBe(true);
+  if (r.ok) {
+    expect(r.readings.source?.bass).toBe('none');
+    expect(r.notes).toHaveLength(1);
+    expect(r.notes[0]).toMatch(/分軌模型/);
+  }
+});
+
+test('separation error message is carried into the note (reviewer minor 1)', async () => {
+  const analyze: AnalyzeFn = async (input, _p, _onStems, onSeparationError) => {
+    onSeparationError?.('ORT init failed');
+    return fakeReadings(input.pcm, input.sampleRate);
+  };
+  const r = await loadDroppedFiles([new File(['abc'], 'song.mp3')], {
+    ...deps,
+    decode: fakeDecode,
+    analyze,
+    stemStore: new MemoryStemStore(),
+  });
+  if (r.ok) {
+    expect(r.notes).toHaveLength(1);
+    expect(r.notes[0]).toMatch(/ORT init failed/);
+    expect(r.notes[0]).not.toMatch(/setup:models/);
+  }
+});
+
+test('analyze receives the abort signal; an aborted run returns reason aborted (reviewer important 1)', async () => {
+  const ctrl = new AbortController();
+  let seen: AbortSignal | undefined;
+  const analyze: AnalyzeFn = async (_input, _p, _s, _e, signal) => {
+    seen = signal;
+    ctrl.abort();
+    throw new DOMException('aborted', 'AbortError');
+  };
+  const r = await loadDroppedFiles([new File(['abc'], 'song.mp3')], {
+    ...deps,
+    decode: fakeDecode,
+    analyze,
+    stemStore: new MemoryStemStore(),
+    signal: ctrl.signal,
+  });
+  expect(seen).toBe(ctrl.signal);
+  expect(r).toEqual({ ok: false, reason: 'aborted' });
+});
+
+test('separation delivered stems → no notes', async () => {
+  const analyze: AnalyzeFn = async (input, _p, onStems) => {
+    onStems?.(fakeStems());
+    return fakeReadings(input.pcm, input.sampleRate);
+  };
+  const r = await loadDroppedFiles([new File(['abc'], 'song.mp3')], {
+    ...deps,
+    decode: fakeDecode,
+    analyze,
+    stemStore: new MemoryStemStore(),
+  });
+  if (r.ok) expect(r.notes).toEqual([]);
+});
+
+test('separate=false → no note about the model', async () => {
+  const r = await loadDroppedFiles([new File(['abc'], 'song.mp3')], {
+    ...deps,
+    decode: fakeDecode,
+    analyze: fakeAudio,
+    separate: false,
+    stemStore: new MemoryStemStore(),
+  });
+  if (r.ok) expect(r.notes).toEqual([]);
+});
+
+test('mp3 + full mid → no audio analysis, so no separation requested', async () => {
+  const inputs: AnalyzeInput[] = [];
+  const analyze: AnalyzeFn = async (input) => {
+    inputs.push(input);
+    return fakeReadings(input.pcm, input.sampleRate);
+  };
+  const midi = makeMidi({
+    tracks: [
+      { name: 'Drums', notes: [{ beat: 0, midi: 36 }] },
+      { name: 'Bass', notes: [{ beat: 0, midi: 36, durationBeats: 2 }] },
+      {
+        name: 'Chords',
+        notes: [
+          { beat: 0, midi: 60, durationBeats: 4 },
+          { beat: 0, midi: 64, durationBeats: 4 },
+          { beat: 0, midi: 67, durationBeats: 4 },
+        ],
+      },
+    ],
+  });
+  const r = await loadDroppedFiles(
+    [new File([''], 'song.mp3'), new File([blob(midi)], 'song.mid')],
+    { ...deps, decode: fakeDecode, analyze, stemStore: new MemoryStemStore() },
+  );
+  expect(r.ok).toBe(true);
+  expect(inputs).toHaveLength(0);
+});
+
+test('deps.separate=false → analyze gets separate=false', async () => {
+  const inputs: AnalyzeInput[] = [];
+  const analyze: AnalyzeFn = async (input) => {
+    inputs.push(input);
+    return fakeReadings(input.pcm, input.sampleRate);
+  };
+  await loadDroppedFiles([new File(['abc'], 'song.mp3')], {
+    ...deps,
+    decode: fakeDecode,
+    analyze,
+    separate: false,
+    stemStore: new MemoryStemStore(),
+  });
+  expect(inputs[0].separate).toBe(false);
+});
+
+test('analyzeInline: separation failure falls back to mix analysis', async () => {
+  const pcm = new Float32Array(44100);
+  let reported: string | undefined;
+  const r = await analyzeInline(
+    { pcm, sampleRate: 44100, left: pcm, right: pcm, separate: true },
+    () => {},
+    undefined,
+    (m) => {
+      reported = m;
+    },
+    undefined,
+    async () => {
+      throw new Error('404');
+    },
+  );
+  expect(r.source?.bass).not.toBe('stem');
+  expect(r.source?.drums).not.toBe('stem');
+  expect(reported).toBe('404');
+});
+
+test('analyzeInline: separation success → stems reported and sources are stem', async () => {
+  const pcm = new Float32Array(44100 * 2);
+  for (let i = 0; i < pcm.length; i++) pcm[i] = Math.sin((2 * Math.PI * 55 * i) / 44100) * 0.5;
+  const stems: Stems = { sampleRate: 44100, drums: pcm, bass: pcm, other: pcm, vocals: pcm };
+  const stages: string[] = [];
+  let got: Stems | undefined;
+  const r = await analyzeInline(
+    { pcm, sampleRate: 44100, left: pcm, right: pcm, separate: true },
+    (stage) => {
+      if (stages[stages.length - 1] !== stage) stages.push(stage);
+    },
+    (s) => {
+      got = s;
+    },
+    undefined,
+    undefined,
+    async (_l, _r, opts) => {
+      opts?.onProgress?.(0.5);
+      return stems;
+    },
+  );
+  expect(got).toBe(stems);
+  expect(stages[0]).toBe('separate');
+  expect(r.source?.bass).toBe('stem');
+}, 60000);
