@@ -241,7 +241,7 @@ test('separation error message is carried into the note (reviewer minor 1)', asy
 test('analyze receives the abort signal; an aborted run returns reason aborted (reviewer important 1)', async () => {
   const ctrl = new AbortController();
   let seen: AbortSignal | undefined;
-  const analyze: AnalyzeFn = async (input, _p, _s, _e, signal) => {
+  const analyze: AnalyzeFn = async (_input, _p, _s, _e, signal) => {
     seen = signal;
     ctrl.abort();
     throw new DOMException('aborted', 'AbortError');
