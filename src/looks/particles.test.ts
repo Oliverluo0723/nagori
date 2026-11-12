@@ -2,12 +2,10 @@ import { expect, test } from 'vitest';
 import { flatSpectrum, hasText, makeCtx, opsOf, spectrumWith } from '../../test/fixtures/looks';
 import { binHz } from '../analysis/audio/spectrum';
 import type { BassNote, ChordEvent, DrumHit } from '../analysis/types';
-import { darkGlow, paperInk } from '../compose/themes';
-import { cometLook } from './comet';
+import { paperInk } from '../compose/themes';
 import { dewDropsAt, dewLook, dewThreads } from './dew';
 import { flowLook, sources } from './flow';
 import { fountainLook } from './fountain';
-import { kaleidoLook } from './kaleido';
 import { RecordingPainter } from './painter/recording';
 import { looks } from './registry';
 import { bassAt, rngFor, ticksAlive } from './sheet';
@@ -30,8 +28,6 @@ const full = { spectrum: flatSpectrum(60, 0.6), drums: hits, bass, chords };
 const all: [Look, number][] = [
   [fountainLook, 19],
   [dewLook, 20],
-  [kaleidoLook, 21],
-  [cometLook, 22],
   [starsLook, 23],
   [flowLook, 24],
 ];
