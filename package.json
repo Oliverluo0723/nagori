@@ -11,7 +11,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
-    "setup:models": "node scripts/setup-models.mjs"
+    "setup:models": "node scripts/setup-models.mjs",
+    "score": "vitest run --config score/vitest.config.ts"
   },
   "dependencies": {
     "@tonejs/midi": "^2.0.28",

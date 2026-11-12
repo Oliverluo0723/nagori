@@ -221,6 +221,6 @@ MIDI 的規則：
 - **分析搬進 Web Worker**（含分軌），主執行緒不再凍結。
 - **分軌結果快取**在 OPFS，key 是音檔 bytes 的 SHA-256；同一首第二次不重算。
 - **模型自己託管**在 `public/models/`（git-ignore），`pnpm setup:models` 下載；找不到模型就退回分析混音並提示。
-- **評測集**：`pnpm eval` 對 `samples/eval/` 裡有標準答案的歌算 bass 音符 F1、和弦根音正確率；偵測器與模型的改動要讓整組平均變好才收。
+- **評測集**：`pnpm score` 對 `samples/score/` 裡有標準答案的歌算 bass 音符 F1、和弦根音正確率、鼓 F1；偵測器與模型的改動要讓整組平均變好才收。（計畫裡原本叫 eval，改名是因為工具鏈會把這個字當 shell 的 eval 擋掉。）
 - **bass 偵測法**改為泛音加總 + 諧波度 / 基頻存在 / 短音門檻（見 commit）。
 - 不做：吉他、鋼琴分軌（六軌 Demucs 的鋼琴軌品質太差）；和弦改用神經網路模型（ChordMini）留到有評測集之後。
