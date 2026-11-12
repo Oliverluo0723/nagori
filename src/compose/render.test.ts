@@ -19,7 +19,8 @@ const single: Composition = {
 test('single cell: the look draws inside the plot box, the frame covers the whole cell', () => {
   const surfaces = new RecordingSurfaceProvider();
   renderFrame({ composition: single, t: 0, readings, surfaces, target: { w: 540, h: 960 } });
-  const { plot } = frameLayout(540, 960, false);
+  // 畫布寬 540 → 字級最小值以 540/1080 縮放，跟 renderFrame 一樣
+  const { plot } = frameLayout(540, 960, false, 540 / 1080);
   const look = surfaces.surfaces.get('c1');
   expect([look?.w, look?.h]).toEqual([plot.w, plot.h]);
   expect(look?.painter.ops[0]).toEqual({ op: 'background', args: ['#0f0f0f'] });
