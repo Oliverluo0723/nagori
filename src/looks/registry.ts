@@ -1,3 +1,4 @@
+import { glideLook } from './glide';
 import { gridLook } from './grid';
 import { ringsLook } from './rings';
 import { spectrumLook } from './spectrum';
@@ -9,4 +10,5 @@ export const looks: Record<string, Look> = {
   [gridLook.id]: gridLook,
   [spectrumLook.id]: spectrumLook,
   [wheelLook.id]: wheelLook,
+  [glideLook.id]: glideLook,
 };
