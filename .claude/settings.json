@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "ClaudeInChromeDomain(otoinstrument.shop)",
+      "mcp__claude-in-chrome__browser_batch"
+    ]
+  }
+}

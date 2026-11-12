@@ -1,0 +1,265 @@
+<h2>9:16 拼版草圖：每一格負責一件事</h2>
+<p class="subtitle">三種分格方式，都是「一格和弦、一格鼓」的原則。點一個最接近你想像的，或在終端機告訴我哪裡要改。</p>
+
+<style>
+  .phones { display:flex; gap:28px; flex-wrap:wrap; justify-content:center; margin:24px 0; }
+  .phone { width:270px; }
+  .phone .card-image { padding:0; background:transparent; }
+  .screen { width:270px; height:480px; border-radius:18px; overflow:hidden; border:1px solid #333; box-shadow:0 8px 30px rgba(0,0,0,.35); }
+  .screen svg { display:block; width:100%; height:100%; }
+  .role { font: 600 11px ui-monospace, Menlo, monospace; letter-spacing:.08em; text-transform:uppercase; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; font-size:13px; margin:6px 0 0; }
+  .legend span::before { content:""; display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:6px; vertical-align:middle; }
+  .l-chord::before { background:#f3b23e; } .l-drum::before { background:#ff4a1c; } .l-bass::before { background:#4f7cff; } .l-spec::before { background:#8dd3c7; } .l-meta::before { background:#888; }
+  .themes { display:flex; gap:28px; justify-content:center; flex-wrap:wrap; margin-top:12px; }
+</style>
+
+<div class="legend">
+  <span class="l-chord">和弦 / 調性</span>
+  <span class="l-drum">鼓（kick · snare · hat）</span>
+  <span class="l-bass">Bass 音高</span>
+  <span class="l-spec">頻譜 / 能量</span>
+  <span class="l-meta">歌名 · BPM · 調 · 數據列</span>
+</div>
+
+<div class="cards phones">
+
+  <!-- A: 三段式 -->
+  <div class="card phone" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="screen">
+        <svg viewBox="0 0 270 480" xmlns="http://www.w3.org/2000/svg">
+          <rect width="270" height="480" fill="#0f0f0f"/>
+          <!-- header -->
+          <text x="16" y="30" fill="#eee" font-size="16" font-weight="700" font-family="sans-serif">Track 01</text>
+          <text x="16" y="46" fill="#ff4a1c" font-size="8" font-family="monospace">01 CHORDS · 137 BPM · D MAJ</text>
+          <!-- chords panel: key wheel -->
+          <rect x="14" y="56" width="242" height="170" fill="none" stroke="#f3b23e" stroke-width="1" stroke-dasharray="3 3"/>
+          <g transform="translate(135,141)">
+            <circle r="62" fill="none" stroke="#333"/>
+            <circle r="40" fill="none" stroke="#333"/>
+            <path d="M0,-62 A62,62 0 0 1 43,-44 L28,-28 A40,40 0 0 0 0,-40 Z" fill="#f3b23e"/>
+            <path d="M43,-44 A62,62 0 0 1 62,0 L40,0 A40,40 0 0 0 28,-28 Z" fill="#f3b23e" opacity=".5"/>
+            <path d="M-62,0 A62,62 0 0 1 -43,-44 L-28,-28 A40,40 0 0 0 -40,0 Z" fill="#f3b23e" opacity=".25"/>
+            <text y="6" text-anchor="middle" fill="#eee" font-size="22" font-weight="700" font-family="sans-serif">D</text>
+            <text x="0" y="-70" text-anchor="middle" fill="#777" font-size="7" font-family="monospace">D</text>
+            <text x="70" y="3" text-anchor="middle" fill="#777" font-size="7" font-family="monospace">A</text>
+            <text x="-70" y="3" text-anchor="middle" fill="#777" font-size="7" font-family="monospace">G</text>
+          </g>
+          <text x="20" y="218" fill="#f3b23e" font-size="7" font-family="monospace">CHORD  Bm   NEXT  G   FIFTHS</text>
+          <!-- drums panel: 16-step grid -->
+          <rect x="14" y="236" width="242" height="150" fill="none" stroke="#ff4a1c" stroke-width="1" stroke-dasharray="3 3"/>
+          <text x="20" y="250" fill="#ff4a1c" font-size="7" font-family="monospace">02 BLOT · bars 9–12</text>
+          <g fill="#eee">
+            <!-- kick row -->
+            <g transform="translate(24,268)">
+              <circle cx="0" cy="0" r="4"/><circle cx="56" cy="0" r="4"/><circle cx="112" cy="0" r="4"/><circle cx="140" cy="0" r="2.5" opacity=".6"/><circle cx="168" cy="0" r="4"/>
+            </g>
+            <!-- snare row -->
+            <g transform="translate(24,292)" fill="none" stroke="#eee" stroke-width="1.2">
+              <path d="M24,-4 l8,8 M32,-4 l-8,8"/><path d="M136,-4 l8,8 M144,-4 l-8,8"/>
+            </g>
+            <!-- hat row -->
+            <g transform="translate(24,316)" fill="#999">
+              <rect x="0" y="-3" width="1.5" height="6"/><rect x="14" y="-3" width="1.5" height="6"/><rect x="28" y="-3" width="1.5" height="6"/><rect x="42" y="-3" width="1.5" height="6"/><rect x="56" y="-3" width="1.5" height="6"/><rect x="70" y="-3" width="1.5" height="6"/><rect x="84" y="-3" width="1.5" height="6"/><rect x="98" y="-3" width="1.5" height="6"/><rect x="112" y="-3" width="1.5" height="6"/><rect x="126" y="-3" width="1.5" height="6"/><rect x="140" y="-3" width="1.5" height="6"/><rect x="154" y="-3" width="1.5" height="6"/><rect x="168" y="-3" width="1.5" height="6"/><rect x="182" y="-3" width="1.5" height="6"/><rect x="196" y="-3" width="1.5" height="6"/><rect x="210" y="-3" width="1.5" height="6"/>
+            </g>
+            <!-- second bar -->
+            <g transform="translate(24,344)">
+              <circle cx="0" cy="0" r="4"/><circle cx="56" cy="0" r="4"/><circle cx="84" cy="0" r="2.5" opacity=".6"/><circle cx="112" cy="0" r="4"/><circle cx="168" cy="0" r="4"/><circle cx="196" cy="0" r="4" fill="#ff4a1c"/>
+            </g>
+            <g transform="translate(24,366)" fill="none" stroke="#eee" stroke-width="1.2">
+              <path d="M24,-4 l8,8 M32,-4 l-8,8"/><path d="M136,-4 l8,8 M144,-4 l-8,8"/><path d="M192,-4 l8,8 M200,-4 l-8,8"/>
+            </g>
+          </g>
+          <line x1="138" y1="256" x2="138" y2="380" stroke="#ff4a1c" stroke-width="1"/>
+          <text x="20" y="300" fill="#555" font-size="5" font-family="monospace" transform="rotate(-90 20 300)">KICK · SNARE · HAT</text>
+          <!-- spectrum strip -->
+          <rect x="14" y="396" width="242" height="48" fill="none" stroke="#8dd3c7" stroke-width="1" stroke-dasharray="3 3"/>
+          <g fill="#8dd3c7" transform="translate(20,440)">
+            <rect x="0" y="-30" width="4" height="30"/><rect x="7" y="-36" width="4" height="36"/><rect x="14" y="-22" width="4" height="22"/><rect x="21" y="-28" width="4" height="28"/><rect x="28" y="-18" width="4" height="18"/><rect x="35" y="-24" width="4" height="24"/><rect x="42" y="-14" width="4" height="14"/><rect x="49" y="-20" width="4" height="20"/><rect x="56" y="-12" width="4" height="12"/><rect x="63" y="-16" width="4" height="16"/><rect x="70" y="-10" width="4" height="10"/><rect x="77" y="-14" width="4" height="14"/><rect x="84" y="-8" width="4" height="8"/><rect x="91" y="-12" width="4" height="12"/><rect x="98" y="-9" width="4" height="9"/><rect x="105" y="-7" width="4" height="7"/><rect x="112" y="-11" width="4" height="11"/><rect x="119" y="-6" width="4" height="6"/><rect x="126" y="-8" width="4" height="8"/><rect x="133" y="-5" width="4" height="5"/><rect x="140" y="-7" width="4" height="7"/><rect x="147" y="-4" width="4" height="4"/><rect x="154" y="-6" width="4" height="6"/><rect x="161" y="-3" width="4" height="3"/><rect x="168" y="-5" width="4" height="5"/><rect x="175" y="-3" width="4" height="3"/><rect x="182" y="-4" width="4" height="4"/><rect x="189" y="-2" width="4" height="2"/><rect x="196" y="-3" width="4" height="3"/><rect x="203" y="-2" width="4" height="2"/><rect x="210" y="-2" width="4" height="2"/><rect x="217" y="-1" width="4" height="1"/><rect x="224" y="-2" width="4" height="2"/>
+          </g>
+          <!-- footer -->
+          <text x="16" y="466" fill="#777" font-size="7" font-family="monospace">KEY D maj   BAR 10.1   LUFS −7.3</text>
+          <text x="254" y="466" text-anchor="end" fill="#ff4a1c" font-size="8" font-weight="700" font-family="sans-serif">@you</text>
+        </svg>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A · 三段式</h3>
+      <p>上：和弦輪（調性 + 現在的和弦）。中：鼓的 16 步格子。下：一條頻譜。最接近你給的第二支 Reel。</p>
+    </div>
+  </div>
+
+  <!-- B: 主圖 + 底欄 -->
+  <div class="card phone" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="screen">
+        <svg viewBox="0 0 270 480" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="g1" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#f3b23e" stop-opacity=".9"/><stop offset="1" stop-color="#f3b23e" stop-opacity="0"/></radialGradient>
+            <radialGradient id="g2" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ff4a1c" stop-opacity=".9"/><stop offset="1" stop-color="#ff4a1c" stop-opacity="0"/></radialGradient>
+            <radialGradient id="g3" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#4f7cff" stop-opacity=".8"/><stop offset="1" stop-color="#4f7cff" stop-opacity="0"/></radialGradient>
+          </defs>
+          <rect width="270" height="480" fill="#0f0f0f"/>
+          <text x="16" y="30" fill="#eee" font-size="16" font-weight="700" font-family="sans-serif">Track 01</text>
+          <text x="16" y="46" fill="#ff4a1c" font-size="8" font-family="monospace">01 CHORD BODIES · D MAJ</text>
+          <!-- hero: chords as glowing bodies -->
+          <rect x="14" y="56" width="242" height="280" fill="none" stroke="#f3b23e" stroke-width="1" stroke-dasharray="3 3"/>
+          <ellipse cx="120" cy="150" rx="70" ry="60" fill="url(#g1)"/>
+          <ellipse cx="170" cy="230" rx="60" ry="50" fill="url(#g1)" opacity=".6"/>
+          <ellipse cx="95" cy="250" rx="45" ry="40" fill="url(#g3)"/>
+          <ellipse cx="160" cy="120" rx="30" ry="26" fill="url(#g2)" opacity=".7"/>
+          <text x="120" y="154" text-anchor="middle" fill="#0f0f0f" font-size="14" font-weight="700" font-family="sans-serif">Bm</text>
+          <text x="170" y="234" text-anchor="middle" fill="#eee" font-size="10" font-family="sans-serif" opacity=".7">G</text>
+          <text x="95" y="254" text-anchor="middle" fill="#eee" font-size="10" font-family="sans-serif" opacity=".8">D1</text>
+          <text x="20" y="328" fill="#f3b23e" font-size="7" font-family="monospace">NOW Bm   BASS D1   VOICES 3</text>
+          <!-- bottom strip: drums clock + bass glide -->
+          <rect x="14" y="346" width="116" height="98" fill="none" stroke="#ff4a1c" stroke-width="1" stroke-dasharray="3 3"/>
+          <g transform="translate(72,392)">
+            <circle r="34" fill="none" stroke="#333"/>
+            <circle r="22" fill="none" stroke="#333"/>
+            <circle r="10" fill="none" stroke="#333"/>
+            <line x1="0" y1="0" x2="20" y2="-27" stroke="#eee" stroke-width="1"/>
+            <circle cx="0" cy="-34" r="3" fill="#ff4a1c"/><circle cx="34" cy="0" r="3" fill="#ff4a1c"/><circle cx="0" cy="34" r="3" fill="#ff4a1c"/><circle cx="-34" cy="0" r="3" fill="#ff4a1c"/>
+            <circle cx="15" cy="-15" r="2" fill="none" stroke="#eee"/><circle cx="-15" cy="15" r="2" fill="none" stroke="#eee"/>
+            <circle cx="7" cy="-7" r="1" fill="#999"/><circle cx="-7" cy="-7" r="1" fill="#999"/><circle cx="7" cy="7" r="1" fill="#999"/><circle cx="-7" cy="7" r="1" fill="#999"/>
+            <text y="4" text-anchor="middle" fill="#eee" font-size="10" font-weight="700" font-family="sans-serif">10</text>
+          </g>
+          <text x="20" y="438" fill="#ff4a1c" font-size="6" font-family="monospace">GROOVE · 1 BAR</text>
+          <rect x="140" y="346" width="116" height="98" fill="none" stroke="#4f7cff" stroke-width="1" stroke-dasharray="3 3"/>
+          <g stroke="#333" stroke-width=".5"><line x1="146" y1="366" x2="250" y2="366"/><line x1="146" y1="386" x2="250" y2="386"/><line x1="146" y1="406" x2="250" y2="406"/><line x1="146" y1="426" x2="250" y2="426"/></g>
+          <path d="M148,420 h20 v-14 h12 l8,-10 h18 v24 h14 l6,-8 h20" fill="none" stroke="#4f7cff" stroke-width="1.5"/>
+          <text x="146" y="438" fill="#4f7cff" font-size="6" font-family="monospace">GLIDE · 808  D1 → F#1</text>
+          <text x="16" y="466" fill="#777" font-size="7" font-family="monospace">137 BPM   D maj   −7.3 LUFS</text>
+          <text x="254" y="466" text-anchor="end" fill="#ff4a1c" font-size="8" font-weight="700" font-family="sans-serif">@you</text>
+        </svg>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B · 主圖 + 底欄</h3>
+      <p>和弦當主角，畫成會呼吸的發光體。底下兩個小格：鼓的一小節時鐘、bass 滑音路徑。發光有機感的方向。</p>
+    </div>
+  </div>
+
+  <!-- C: 四格 -->
+  <div class="card phone" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="screen">
+        <svg viewBox="0 0 270 480" xmlns="http://www.w3.org/2000/svg">
+          <rect width="270" height="480" fill="#0f0f0f"/>
+          <text x="16" y="30" fill="#eee" font-size="16" font-weight="700" font-family="sans-serif">Track 01</text>
+          <text x="16" y="46" fill="#ff4a1c" font-size="8" font-family="monospace">COMPOSE · 4 STUDIES</text>
+          <!-- TL chords: roots network -->
+          <rect x="14" y="56" width="116" height="190" fill="none" stroke="#f3b23e" stroke-width="1" stroke-dasharray="3 3"/>
+          <g stroke="#f3b23e" stroke-width="1" fill="#f3b23e">
+            <line x1="72" y1="150" x2="40" y2="100"/><line x1="72" y1="150" x2="105" y2="110"/><line x1="72" y1="150" x2="60" y2="200"/><line x1="72" y1="150" x2="110" y2="190"/><line x1="40" y1="100" x2="60" y2="80" opacity=".4"/>
+            <circle cx="72" cy="150" r="7"/><circle cx="40" cy="100" r="4"/><circle cx="105" cy="110" r="5"/><circle cx="60" cy="200" r="3"/><circle cx="110" cy="190" r="4"/><circle cx="60" cy="80" r="2" opacity=".5"/>
+          </g>
+          <text x="80" y="153" fill="#0f0f0f" font-size="6" font-weight="700" font-family="monospace">D</text>
+          <text x="20" y="238" fill="#f3b23e" font-size="6" font-family="monospace">ROOTS · 7 NOTES</text>
+          <!-- TR drums: rings on time axis -->
+          <rect x="140" y="56" width="116" height="190" fill="none" stroke="#ff4a1c" stroke-width="1" stroke-dasharray="3 3"/>
+          <line x1="198" y1="66" x2="198" y2="230" stroke="#333"/>
+          <g fill="none" stroke="#eee">
+            <circle cx="198" cy="80" r="10" fill="#ff4a1c" stroke="none"/>
+            <circle cx="198" cy="104" r="6"/>
+            <circle cx="198" cy="128" r="12" fill="#ff4a1c" stroke="none" opacity=".8"/>
+            <circle cx="198" cy="150" r="5"/>
+            <circle cx="198" cy="176" r="11" fill="#ff4a1c" stroke="none" opacity=".6"/>
+            <circle cx="198" cy="200" r="7"/>
+            <rect x="197" y="90" width="1.5" height="6" fill="#999" stroke="none"/><rect x="197" y="114" width="1.5" height="6" fill="#999" stroke="none"/><rect x="197" y="138" width="1.5" height="6" fill="#999" stroke="none"/><rect x="197" y="162" width="1.5" height="6" fill="#999" stroke="none"/><rect x="197" y="186" width="1.5" height="6" fill="#999" stroke="none"/>
+          </g>
+          <text x="146" y="238" fill="#ff4a1c" font-size="6" font-family="monospace">RINGS · HITS</text>
+          <!-- BL bass: scope -->
+          <rect x="14" y="256" width="116" height="140" fill="none" stroke="#4f7cff" stroke-width="1" stroke-dasharray="3 3"/>
+          <path d="M20,326 q10,-40 20,0 t20,0 t20,0 t20,0 t20,0" fill="none" stroke="#4f7cff" stroke-width="1.5"/>
+          <path d="M20,326 q10,-28 20,0 t20,0 t20,0 t20,0 t20,0" fill="none" stroke="#4f7cff" stroke-width=".6" opacity=".5"/>
+          <text x="20" y="388" fill="#4f7cff" font-size="6" font-family="monospace">SCOPE · D1 36.4 Hz</text>
+          <!-- BR spectrum: pegboard -->
+          <rect x="140" y="256" width="116" height="140" fill="none" stroke="#8dd3c7" stroke-width="1" stroke-dasharray="3 3"/>
+          <g fill="#8dd3c7">
+            <g transform="translate(150,268)">
+              <circle cx="0" cy="0" r="3"/><circle cx="12" cy="0" r="3"/><circle cx="24" cy="0" r="3" opacity=".5"/><circle cx="36" cy="0" r="3"/><circle cx="48" cy="0" r="3" opacity=".3"/><circle cx="60" cy="0" r="3" opacity=".5"/><circle cx="72" cy="0" r="3" opacity=".2"/><circle cx="84" cy="0" r="3" opacity=".2"/>
+            </g>
+            <g transform="translate(150,282)">
+              <circle cx="0" cy="0" r="3"/><circle cx="12" cy="0" r="3" opacity=".6"/><circle cx="24" cy="0" r="3"/><circle cx="36" cy="0" r="3" opacity=".3"/><circle cx="48" cy="0" r="3" opacity=".5"/><circle cx="60" cy="0" r="3" opacity=".2"/><circle cx="72" cy="0" r="3" opacity=".4"/><circle cx="84" cy="0" r="3" opacity=".1"/>
+            </g>
+            <g transform="translate(150,296)">
+              <circle cx="0" cy="0" r="3" opacity=".8"/><circle cx="12" cy="0" r="3"/><circle cx="24" cy="0" r="3" opacity=".4"/><circle cx="36" cy="0" r="3" opacity=".6"/><circle cx="48" cy="0" r="3" opacity=".2"/><circle cx="60" cy="0" r="3" opacity=".3"/><circle cx="72" cy="0" r="3" opacity=".1"/><circle cx="84" cy="0" r="3" opacity=".2"/>
+            </g>
+            <g transform="translate(150,310)">
+              <circle cx="0" cy="0" r="3"/><circle cx="12" cy="0" r="3" opacity=".5"/><circle cx="24" cy="0" r="3" opacity=".7"/><circle cx="36" cy="0" r="3" opacity=".2"/><circle cx="48" cy="0" r="3" opacity=".4"/><circle cx="60" cy="0" r="3" opacity=".1"/><circle cx="72" cy="0" r="3" opacity=".3"/><circle cx="84" cy="0" r="3" opacity=".1"/>
+            </g>
+            <g transform="translate(150,324)" fill="#ff4a1c">
+              <circle cx="0" cy="0" r="3"/><circle cx="12" cy="0" r="3"/><circle cx="24" cy="0" r="3" opacity=".6"/><circle cx="36" cy="0" r="3" opacity=".8"/><circle cx="48" cy="0" r="3" opacity=".4"/><circle cx="60" cy="0" r="3" opacity=".5"/><circle cx="72" cy="0" r="3" opacity=".3"/><circle cx="84" cy="0" r="3" opacity=".2"/>
+            </g>
+            <g transform="translate(150,338)">
+              <circle cx="0" cy="0" r="3" opacity=".7"/><circle cx="12" cy="0" r="3" opacity=".3"/><circle cx="24" cy="0" r="3" opacity=".5"/><circle cx="36" cy="0" r="3" opacity=".2"/><circle cx="48" cy="0" r="3" opacity=".3"/><circle cx="60" cy="0" r="3" opacity=".1"/><circle cx="72" cy="0" r="3" opacity=".2"/><circle cx="84" cy="0" r="3" opacity=".1"/>
+            </g>
+            <g transform="translate(150,352)">
+              <circle cx="0" cy="0" r="3" opacity=".9"/><circle cx="12" cy="0" r="3" opacity=".6"/><circle cx="24" cy="0" r="3" opacity=".3"/><circle cx="36" cy="0" r="3" opacity=".4"/><circle cx="48" cy="0" r="3" opacity=".2"/><circle cx="60" cy="0" r="3" opacity=".2"/><circle cx="72" cy="0" r="3" opacity=".1"/><circle cx="84" cy="0" r="3" opacity=".1"/>
+            </g>
+          </g>
+          <text x="146" y="388" fill="#8dd3c7" font-size="6" font-family="monospace">PEGBOARD · 8 BANDS</text>
+          <!-- footer wide -->
+          <rect x="14" y="406" width="242" height="38" fill="none" stroke="#555" stroke-width="1" stroke-dasharray="3 3"/>
+          <text x="20" y="420" fill="#777" font-size="6" font-family="monospace">TITLE        BPM     KEY        BAR</text>
+          <text x="20" y="434" fill="#eee" font-size="8" font-family="monospace">Track 01     137     D maj      10.1</text>
+          <text x="254" y="466" text-anchor="end" fill="#ff4a1c" font-size="8" font-weight="700" font-family="sans-serif">@you</text>
+        </svg>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C · 四格儀表</h3>
+      <p>和弦、鼓、bass、頻譜各一格，底下一條數據列。像一張儀器報表，資訊最多，每格都小。</p>
+    </div>
+  </div>
+</div>
+
+<h3 style="margin-top:36px">同一版型換皮：黑底發光 ↔ 紙感墨印</h3>
+<p class="subtitle">以 A 為例。look 只管形狀，顏色與質感由主題決定，所以任何一種版型都能兩種風格輸出。</p>
+
+<div class="themes">
+  <div class="screen" style="width:200px;height:356px">
+    <svg viewBox="0 0 270 480" xmlns="http://www.w3.org/2000/svg">
+      <rect width="270" height="480" fill="#0f0f0f"/>
+      <text x="16" y="30" fill="#eee" font-size="16" font-weight="700" font-family="sans-serif">Track 01</text>
+      <g transform="translate(135,141)">
+        <circle r="62" fill="none" stroke="#333"/><circle r="40" fill="none" stroke="#333"/>
+        <path d="M0,-62 A62,62 0 0 1 43,-44 L28,-28 A40,40 0 0 0 0,-40 Z" fill="#f3b23e"/>
+        <path d="M43,-44 A62,62 0 0 1 62,0 L40,0 A40,40 0 0 0 28,-28 Z" fill="#f3b23e" opacity=".5"/>
+        <text y="6" text-anchor="middle" fill="#eee" font-size="22" font-weight="700" font-family="sans-serif">D</text>
+      </g>
+      <g fill="#eee">
+        <g transform="translate(24,268)"><circle r="4"/><circle cx="56" r="4"/><circle cx="112" r="4"/><circle cx="168" r="4"/></g>
+        <g transform="translate(24,292)" fill="none" stroke="#eee" stroke-width="1.2"><path d="M24,-4 l8,8 M32,-4 l-8,8"/><path d="M136,-4 l8,8 M144,-4 l-8,8"/></g>
+        <g transform="translate(24,344)"><circle r="4"/><circle cx="56" r="4"/><circle cx="112" r="4"/><circle cx="168" r="4"/><circle cx="196" r="4" fill="#ff4a1c"/></g>
+      </g>
+      <line x1="138" y1="256" x2="138" y2="380" stroke="#ff4a1c"/>
+      <g fill="#8dd3c7" transform="translate(20,440)"><rect y="-30" width="4" height="30"/><rect x="7" y="-36" width="4" height="36"/><rect x="14" y="-22" width="4" height="22"/><rect x="21" y="-28" width="4" height="28"/><rect x="28" y="-18" width="4" height="18"/><rect x="35" y="-24" width="4" height="24"/><rect x="42" y="-14" width="4" height="14"/><rect x="49" y="-20" width="4" height="20"/><rect x="56" y="-12" width="4" height="12"/><rect x="63" y="-16" width="4" height="16"/><rect x="70" y="-10" width="4" height="10"/><rect x="77" y="-14" width="4" height="14"/><rect x="84" y="-8" width="4" height="8"/><rect x="91" y="-12" width="4" height="12"/><rect x="98" y="-9" width="4" height="9"/><rect x="105" y="-7" width="4" height="7"/><rect x="112" y="-11" width="4" height="11"/><rect x="119" y="-6" width="4" height="6"/><rect x="126" y="-8" width="4" height="8"/><rect x="133" y="-5" width="4" height="5"/><rect x="140" y="-7" width="4" height="7"/><rect x="147" y="-4" width="4" height="4"/><rect x="154" y="-6" width="4" height="6"/><rect x="161" y="-3" width="4" height="3"/><rect x="168" y="-5" width="4" height="5"/><rect x="175" y="-3" width="4" height="3"/><rect x="182" y="-4" width="4" height="4"/><rect x="189" y="-2" width="4" height="2"/><rect x="196" y="-3" width="4" height="3"/><rect x="203" y="-2" width="4" height="2"/><rect x="210" y="-2" width="4" height="2"/><rect x="217" y="-1" width="4" height="1"/></g>
+      <text x="16" y="466" fill="#777" font-size="7" font-family="monospace">KEY D maj   BAR 10.1   LUFS −7.3</text>
+    </svg>
+  </div>
+  <div class="screen" style="width:200px;height:356px;border-color:#ccc">
+    <svg viewBox="0 0 270 480" xmlns="http://www.w3.org/2000/svg">
+      <rect width="270" height="480" fill="#f1ede4"/>
+      <text x="16" y="30" fill="#161616" font-size="16" font-weight="700" font-family="sans-serif">Track 01</text>
+      <g transform="translate(135,141)">
+        <circle r="62" fill="none" stroke="#c9c3b6"/><circle r="40" fill="none" stroke="#c9c3b6"/>
+        <path d="M0,-62 A62,62 0 0 1 43,-44 L28,-28 A40,40 0 0 0 0,-40 Z" fill="#161616"/>
+        <path d="M43,-44 A62,62 0 0 1 62,0 L40,0 A40,40 0 0 0 28,-28 Z" fill="#161616" opacity=".35"/>
+        <text y="6" text-anchor="middle" fill="#161616" font-size="22" font-weight="700" font-family="sans-serif">D</text>
+      </g>
+      <g fill="#161616">
+        <g transform="translate(24,268)"><circle r="4"/><circle cx="56" r="4"/><circle cx="112" r="4"/><circle cx="168" r="4"/></g>
+        <g transform="translate(24,292)" fill="none" stroke="#161616" stroke-width="1.2"><path d="M24,-4 l8,8 M32,-4 l-8,8"/><path d="M136,-4 l8,8 M144,-4 l-8,8"/></g>
+        <g transform="translate(24,344)"><circle r="4"/><circle cx="56" r="4"/><circle cx="112" r="4"/><circle cx="168" r="4"/><circle cx="196" r="4" fill="#ff4a1c"/></g>
+      </g>
+      <line x1="138" y1="256" x2="138" y2="380" stroke="#ff4a1c"/>
+      <g fill="#161616" transform="translate(20,440)"><rect y="-30" width="4" height="30"/><rect x="7" y="-36" width="4" height="36"/><rect x="14" y="-22" width="4" height="22"/><rect x="21" y="-28" width="4" height="28"/><rect x="28" y="-18" width="4" height="18"/><rect x="35" y="-24" width="4" height="24"/><rect x="42" y="-14" width="4" height="14"/><rect x="49" y="-20" width="4" height="20"/><rect x="56" y="-12" width="4" height="12"/><rect x="63" y="-16" width="4" height="16"/><rect x="70" y="-10" width="4" height="10"/><rect x="77" y="-14" width="4" height="14"/><rect x="84" y="-8" width="4" height="8"/><rect x="91" y="-12" width="4" height="12"/><rect x="98" y="-9" width="4" height="9"/><rect x="105" y="-7" width="4" height="7"/><rect x="112" y="-11" width="4" height="11"/><rect x="119" y="-6" width="4" height="6"/><rect x="126" y="-8" width="4" height="8"/><rect x="133" y="-5" width="4" height="5"/><rect x="140" y="-7" width="4" height="7"/><rect x="147" y="-4" width="4" height="4"/><rect x="154" y="-6" width="4" height="6"/><rect x="161" y="-3" width="4" height="3"/><rect x="168" y="-5" width="4" height="5"/><rect x="175" y="-3" width="4" height="3"/><rect x="182" y="-4" width="4" height="4"/><rect x="189" y="-2" width="4" height="2"/><rect x="196" y="-3" width="4" height="3"/><rect x="203" y="-2" width="4" height="2"/><rect x="210" y="-2" width="4" height="2"/><rect x="217" y="-1" width="4" height="1"/></g>
+      <circle cx="236" cy="420" r="16" fill="none" stroke="#ff4a1c" stroke-width="1.2"/>
+      <text x="236" y="424" text-anchor="middle" fill="#ff4a1c" font-size="9" font-weight="700" font-family="monospace">001</text>
+      <text x="16" y="466" fill="#6b665c" font-size="7" font-family="monospace">KEY D maj   BAR 10.1   LUFS −7.3</text>
+    </svg>
+  </div>
+</div>
