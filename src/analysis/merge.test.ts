@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { mergeReadings } from './merge';
 import { tempoMapFromBpm } from './tempo';
-import type { Readings } from './types';
+import type { Readings, ReadingsSource } from './types';
 
 const midiOnlyDrums: Readings = {
   duration: 10,
@@ -48,10 +48,40 @@ test('MIDI with drums only: drums and tempo from MIDI, chords/bass/key from audi
     chords: 'audio',
     bass: 'audio',
     key: 'audio',
+    notes: 'none',
   });
 });
 
 test('audio only and midi only pass through', () => {
   expect(mergeReadings(undefined, audio)).toBe(audio);
   expect(mergeReadings(midiOnlyDrums, undefined)).toBe(midiOnlyDrums);
+});
+
+const note = (time: number, midi: number) => ({ time, duration: 0.5, midi, velocity: 0.8 });
+
+test('notes: MIDI notes win over transcribed ones', () => {
+  const midi: Readings = {
+    ...midiOnlyDrums,
+    notes: [note(0, 60)],
+    source: { ...(midiOnlyDrums.source as ReadingsSource), notes: 'midi' },
+  };
+  const a: Readings = {
+    ...audio,
+    notes: [note(1, 62), note(2, 64)],
+    source: { ...(audio.source as ReadingsSource), notes: 'audio' },
+  };
+  const r = mergeReadings(midi, a);
+  expect(r.notes).toBe(midi.notes);
+  expect(r.source?.notes).toBe('midi');
+});
+
+test('notes: MIDI without notes falls back to transcribed notes and their source', () => {
+  const a: Readings = {
+    ...audio,
+    notes: [note(1, 62)],
+    source: { ...(audio.source as ReadingsSource), notes: 'stem' },
+  };
+  const r = mergeReadings({ ...midiOnlyDrums, notes: [] }, a);
+  expect(r.notes).toBe(a.notes);
+  expect(r.source?.notes).toBe('stem');
 });

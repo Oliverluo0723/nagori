@@ -3,6 +3,7 @@ import { extractBass } from './midi/bass';
 import { extractChords } from './midi/chords';
 import { extractDrumHits } from './midi/drums';
 import { detectKey } from './midi/key';
+import { extractNotes } from './midi/notes';
 import { assignRoles } from './midi/roles';
 import { buildTempoMap } from './tempo';
 import type { BassNote, DrumHit, Readings, Spectrum } from './types';
@@ -23,8 +24,10 @@ export function analyzeMidi(bytes: ArrayBuffer | Uint8Array, durationHint?: numb
   const drums: DrumHit[] = [];
   const bass: BassNote[] = [];
   const chordTracks = [];
+  const noteTracks = [];
   for (const r of roles) {
     const track = midi.tracks[r.index];
+    if (r.role !== 'drums') noteTracks.push(track);
     if (r.role === 'drums') drums.push(...extractDrumHits(track));
     else if (r.role === 'bass') bass.push(...extractBass(track));
     else if (r.role === 'chords') chordTracks.push(track);
@@ -33,6 +36,7 @@ export function analyzeMidi(bytes: ArrayBuffer | Uint8Array, durationHint?: numb
   bass.sort((a, b) => a.time - b.time);
   const chords = extractChords(chordTracks, tempo, duration);
   const key = detectKey(midi.header, chords);
+  const notes = extractNotes(noteTracks);
 
   return {
     duration,
@@ -42,12 +46,14 @@ export function analyzeMidi(bytes: ArrayBuffer | Uint8Array, durationHint?: numb
     chords,
     bass,
     key,
+    notes,
     source: {
       tempo: 'midi',
       drums: drums.length ? 'midi' : 'none',
       chords: chords.length ? 'midi' : 'none',
       bass: bass.length ? 'midi' : 'none',
       key: key ? 'midi' : 'none',
+      notes: notes.length ? 'midi' : 'none',
     },
   };
 }

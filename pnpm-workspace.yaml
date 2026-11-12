@@ -1,2 +1,5 @@
 allowBuilds:
   protobufjs: false
+  core-js: false
+overrides:
+  '@spotify/basic-pitch>@tensorflow/tfjs': ^4.22.0

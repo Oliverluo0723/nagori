@@ -6,6 +6,7 @@ const NONE: ReadingsSource = {
   chords: 'none',
   bass: 'none',
   key: 'none',
+  notes: 'none',
 };
 
 /** MIDI 有的欄位用 MIDI，沒有的用音訊；spectrum 永遠來自音訊；duration 取大。 */
@@ -22,6 +23,7 @@ export function mergeReadings(midi: Readings | undefined, audio: Readings | unde
   const useMidiChords = (midi.chords?.length ?? 0) > 0;
   const useMidiBass = (midi.bass?.length ?? 0) > 0;
   const useMidiKey = midi.key !== undefined;
+  const useMidiNotes = (midi.notes?.length ?? 0) > 0;
   return {
     duration: Math.max(midi.duration, audio.duration),
     tempo: midi.tempo,
@@ -30,6 +32,7 @@ export function mergeReadings(midi: Readings | undefined, audio: Readings | unde
     chords: pick(midi.chords, audio.chords, useMidiChords),
     bass: pick(midi.bass, audio.bass, useMidiBass),
     key: pick(midi.key, audio.key, useMidiKey),
+    notes: pick(midi.notes, audio.notes, useMidiNotes),
     spectrum: audio.spectrum,
     rhythm: audio.rhythm,
     source: {
@@ -38,6 +41,7 @@ export function mergeReadings(midi: Readings | undefined, audio: Readings | unde
       chords: useMidiChords ? 'midi' : as.chords,
       bass: useMidiBass ? 'midi' : as.bass,
       key: useMidiKey ? 'midi' : as.key,
+      notes: useMidiNotes ? 'midi' : (as.notes ?? 'none'),
     },
   };
 }

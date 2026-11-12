@@ -1,8 +1,16 @@
 // 一次備齊分軌要的模型（不進 git）：
 //   public/models/htdemucs_embedded.onnx  ← Hugging Face（或 SETUP_MODELS_FROM=<本機路徑> 直接複製）
+//   public/models/basic-pitch/             ← 從 node_modules/@spotify/basic-pitch/model/ 複製（轉譜用，約 0.9 MB）
 // ORT 的 wasm 不用放：separate.ts 用 Vite 的 ?url 從 node_modules 拿。
 // 用法：pnpm setup:models
-import { copyFileSync, createWriteStream, existsSync, mkdirSync, statSync } from 'node:fs';
+import {
+  copyFileSync,
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  statSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -53,4 +61,17 @@ async function ensureModel() {
   console.log('model: downloaded');
 }
 
+/** Basic Pitch 的 GraphModel：model.json + 權重檔，套件裡就有，直接複製 */
+function ensureBasicPitch() {
+  const src = join(ROOT, 'node_modules', '@spotify', 'basic-pitch', 'model');
+  const dst = join(MODEL_DIR, 'basic-pitch');
+  mkdirSync(dst, { recursive: true });
+  for (const name of readdirSync(src)) {
+    if (sizeOf(join(dst, name)) === sizeOf(join(src, name))) continue;
+    copyFileSync(join(src, name), join(dst, name));
+  }
+  console.log('basic-pitch: ok');
+}
+
 await ensureModel();
+ensureBasicPitch();
