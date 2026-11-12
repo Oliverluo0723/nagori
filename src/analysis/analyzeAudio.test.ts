@@ -36,3 +36,35 @@ test('silence yields empty readings with source none and no crash (review focus 
   expect(r.source?.tempo).toBe('none');
   expect(bpmAt(r.tempo, 0)).toBe(120); // 沒有節拍時的預設拍格
 }, 60000);
+
+test('with stems: drums come from the drum stem, bass from the bass stem, sources are stem', async () => {
+  const mix = synthBeat({ bars: 4 });
+  const stems = {
+    sampleRate: 44100 as const,
+    drums: synthBeat({ bars: 4, bassPartials: [], chords: [[]] }),
+    bass: synthBeat({ bars: 4, drums: false, chords: [[]] }),
+    other: synthBeat({ bars: 4, drums: false, bassPartials: [] }),
+    vocals: new Float32Array(mix.length),
+  };
+  const r = await analyzeAudio(mix, 44100, () => {}, { stems });
+  expect(r.source).toMatchObject({
+    drums: 'stem',
+    bass: 'stem',
+    chords: 'stem',
+    key: 'stem',
+    tempo: 'audio',
+  });
+  expect(r.bass?.length).toBeGreaterThan(0);
+  expect(r.bass?.every((n) => [35, 31, 38, 33].includes(n.midi))).toBe(true);
+  expect(r.drums.filter((h) => h.kind === 'kick').length).toBeGreaterThanOrEqual(8);
+}, 60000);
+
+test('silent bass stem → no bass notes, source none (review focus 4)', async () => {
+  const mix = synthBeat({ bars: 2 });
+  const z = new Float32Array(mix.length);
+  const r = await analyzeAudio(mix, 44100, () => {}, {
+    stems: { sampleRate: 44100, drums: mix, bass: z, other: mix, vocals: z },
+  });
+  expect(r.bass).toEqual([]);
+  expect(r.source?.bass).toBe('none');
+}, 60000);

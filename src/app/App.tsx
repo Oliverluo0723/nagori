@@ -17,6 +17,7 @@ const ERROR_TEXT = {
 
 const STAGE_TEXT: Record<Stage, string> = {
   decode: '解碼音檔',
+  separate: '分軌（第一次約一分鐘）',
   spectrum: '算頻譜',
   rhythm: '找節拍',
   drums: '找鼓點',
