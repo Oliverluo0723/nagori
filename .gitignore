@@ -5,3 +5,5 @@ dist
 .claude/
 samples/
 samples
+public/models/
+public/ort/
