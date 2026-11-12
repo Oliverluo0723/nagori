@@ -14,8 +14,10 @@ const MIDI_EXT = ['mid', 'midi'];
 
 export type LoadFailure = 'need-audio' | 'parse-failed' | 'no-beat';
 export type LoadResult =
-  | { ok: true; readings: Readings; audioUrl: string; name: string }
+  | { ok: true; readings: Readings; audioUrl: string; name: string; notes: string[] }
   | { ok: false; reason: LoadFailure };
+
+const NOTE_NO_STEMS = '找不到分軌模型，改用混音分析：先跑 pnpm setup:models';
 
 export interface LoadDeps {
   getDuration: (audio: File) => Promise<number>;
@@ -61,6 +63,7 @@ export async function loadDroppedFiles(files: File[], deps: LoadDeps): Promise<L
     files.filter((f) => MIDI_EXT.includes(ext(f))),
   );
   const progress = deps.onProgress ?? (() => {});
+  const notes: string[] = [];
   try {
     const duration = await deps.getDuration(audio);
     let midiReadings: Readings | undefined;
@@ -84,6 +87,8 @@ export async function loadDroppedFiles(files: File[], deps: LoadDeps): Promise<L
           const store = deps.stemStore ?? new OpfsStemStore();
           const key = await stemKey(await audio.arrayBuffer());
           const cached = await store.get(key);
+          const separate = deps.separate !== false && !cached;
+          let gotStems = false;
           audioReadings = await analyze(
             {
               pcm,
@@ -91,13 +96,16 @@ export async function loadDroppedFiles(files: File[], deps: LoadDeps): Promise<L
               left: left ?? pcm,
               right: right ?? pcm,
               stems: cached,
-              separate: deps.separate !== false && !cached,
+              separate,
             },
             progress,
             (stems) => {
+              gotStems = true;
               store.put(key, stems).catch((err) => console.warn('stem cache write failed', err));
             },
           );
+          // 要分軌卻沒拿到 stems：模型不在或 ORT 載不起來，分析已退回混音
+          if (separate && !gotStems) notes.push(NOTE_NO_STEMS);
         } else {
           audioReadings = withSpectrum(
             { ...midiReadings, drums: [], chords: [], bass: [], key: undefined, source: undefined },
@@ -119,6 +127,7 @@ export async function loadDroppedFiles(files: File[], deps: LoadDeps): Promise<L
       readings,
       audioUrl: createUrl(audio),
       name: audio.name.replace(/\.[^.]+$/, ''),
+      notes,
     };
   } catch (err) {
     console.error('load failed', err);
@@ -153,7 +162,7 @@ export type ProjectState =
   | { status: 'empty' }
   | { status: 'analyzing'; stage: Stage; fraction: number }
   | { status: 'error'; reason: LoadFailure }
-  | { status: 'ready'; readings: Readings; audioUrl: string; name: string };
+  | { status: 'ready'; readings: Readings; audioUrl: string; name: string; notes: string[] };
 
 export function useProject() {
   const [state, setState] = useState<ProjectState>({ status: 'empty' });
@@ -166,7 +175,13 @@ export function useProject() {
       onProgress: (stage, fraction) => setState({ status: 'analyzing', stage, fraction }),
     });
     if (r.ok)
-      setState({ status: 'ready', readings: r.readings, audioUrl: r.audioUrl, name: r.name });
+      setState({
+        status: 'ready',
+        readings: r.readings,
+        audioUrl: r.audioUrl,
+        name: r.name,
+        notes: r.notes,
+      });
     else setState({ status: 'error', reason: r.reason });
   }, []);
 

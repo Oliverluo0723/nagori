@@ -167,6 +167,11 @@ export function App() {
           </dl>
         )}
         {ready && ready.readings.drums.length === 0 && <p style={styles.error}>找不到鼓</p>}
+        {ready?.notes.map((n) => (
+          <p key={n} style={styles.note}>
+            {n}
+          </p>
+        ))}
 
         {ready && candidates.length > 0 && (
           <div>
@@ -269,6 +274,7 @@ const styles: Record<string, React.CSSProperties> = {
   logo: { fontSize: 28, margin: 0 },
   hint: { color: '#7a7a7a', fontSize: 13, margin: 0 },
   error: { color: '#ff4a1c', margin: 0 },
+  note: { color: '#8a8a8a', margin: 0, fontSize: 11 },
   readings: {
     display: 'grid',
     gridTemplateColumns: 'auto 1fr',

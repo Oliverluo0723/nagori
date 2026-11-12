@@ -204,6 +204,47 @@ test('cache hit skips separation (review focus 2)', async () => {
   expect(inputs[0]).toMatchObject({ separate: false, stems });
 });
 
+test('separation unavailable → falls back to mix analysis with a note (review focus 1)', async () => {
+  // analyze 要分軌卻沒回報 stems、來源也不是 stem：分軌沒成功
+  const r = await loadDroppedFiles([new File(['abc'], 'song.mp3')], {
+    ...deps,
+    decode: fakeDecode,
+    analyze: fakeAudio,
+    stemStore: new MemoryStemStore(),
+  });
+  expect(r.ok).toBe(true);
+  if (r.ok) {
+    expect(r.readings.source?.bass).toBe('none');
+    expect(r.notes).toHaveLength(1);
+    expect(r.notes[0]).toMatch(/分軌模型/);
+  }
+});
+
+test('separation delivered stems → no notes', async () => {
+  const analyze: AnalyzeFn = async (input, _p, onStems) => {
+    onStems?.(fakeStems());
+    return fakeReadings(input.pcm, input.sampleRate);
+  };
+  const r = await loadDroppedFiles([new File(['abc'], 'song.mp3')], {
+    ...deps,
+    decode: fakeDecode,
+    analyze,
+    stemStore: new MemoryStemStore(),
+  });
+  if (r.ok) expect(r.notes).toEqual([]);
+});
+
+test('separate=false → no note about the model', async () => {
+  const r = await loadDroppedFiles([new File(['abc'], 'song.mp3')], {
+    ...deps,
+    decode: fakeDecode,
+    analyze: fakeAudio,
+    separate: false,
+    stemStore: new MemoryStemStore(),
+  });
+  if (r.ok) expect(r.notes).toEqual([]);
+});
+
 test('mp3 + full mid → no audio analysis, so no separation requested', async () => {
   const inputs: AnalyzeInput[] = [];
   const analyze: AnalyzeFn = async (input) => {
