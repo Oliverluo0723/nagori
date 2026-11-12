@@ -1,10 +1,21 @@
 import { assertStems, type StemName, type Stems } from './types';
 
-/** 模型與 ORT wasm 都由 `pnpm setup:models` 放進 public/，同源提供（COEP 之下跨域要 CORS，自己放最省事） */
+// ORT 的 wasm 膠水檔：用 new URL(相對路徑, import.meta.url)，dev 由 Vite 直接服務 node_modules，
+// build 時當 asset 打包。放 public/ 不行（Vite dev 不讓 public 裡的 .mjs 被 import()），
+// 用 bare specifier 也不行（套件的 exports 沒開放 dist/）。jsep 版同時支援 webgpu 與 wasm。
+const ORT_MJS = new URL(
+  '../../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.mjs',
+  import.meta.url,
+);
+const ORT_WASM = new URL(
+  '../../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm',
+  import.meta.url,
+);
+
+/** 模型由 `pnpm setup:models` 放進 public/models/，同源提供（COEP 之下跨域要 CORS，自己放最省事） */
 export const MODEL_URL = '/models/htdemucs_embedded.onnx';
 export const MODEL_SOURCE =
   'https://huggingface.co/timcsy/demucs-web-onnx/resolve/main/htdemucs_embedded.onnx';
-export const ORT_WASM_PATH = '/ort/';
 
 export interface StereoChannels {
   left: Float32Array;
@@ -37,7 +48,7 @@ async function createDemucsProcessor(
 ): Promise<StemProcessor> {
   const ort = await import('onnxruntime-web');
   const { DemucsProcessor } = await import('demucs-web');
-  ort.env.wasm.wasmPaths = ORT_WASM_PATH;
+  ort.env.wasm.wasmPaths = { mjs: ORT_MJS.href, wasm: ORT_WASM.href };
   ort.env.wasm.numThreads = globalThis.navigator?.hardwareConcurrency || 4;
   return new DemucsProcessor({
     ort,

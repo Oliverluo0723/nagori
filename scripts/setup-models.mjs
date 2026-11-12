@@ -1,8 +1,8 @@
-// 一次備齊分軌要的檔案（都不進 git）：
+// 一次備齊分軌要的模型（不進 git）：
 //   public/models/htdemucs_embedded.onnx  ← Hugging Face（或 SETUP_MODELS_FROM=<本機路徑> 直接複製）
-//   public/ort/ort-wasm-simd-threaded*.{mjs,wasm}  ← node_modules/onnxruntime-web/dist
+// ORT 的 wasm 不用放：separate.ts 用 Vite 的 ?url 從 node_modules 拿。
 // 用法：pnpm setup:models
-import { copyFileSync, createWriteStream, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { copyFileSync, createWriteStream, existsSync, mkdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -13,8 +13,6 @@ const MODEL_SOURCE =
 const MODEL_BYTES = 180534758;
 const MODEL_DIR = join(ROOT, 'public', 'models');
 const MODEL_PATH = join(MODEL_DIR, 'htdemucs_embedded.onnx');
-const ORT_SRC = join(ROOT, 'node_modules', 'onnxruntime-web', 'dist');
-const ORT_DIR = join(ROOT, 'public', 'ort');
 
 function sizeOf(path) {
   return existsSync(path) ? statSync(path).size : -1;
@@ -55,15 +53,4 @@ async function ensureModel() {
   console.log('model: downloaded');
 }
 
-function ensureOrt() {
-  mkdirSync(ORT_DIR, { recursive: true });
-  const files = readdirSync(ORT_SRC).filter(
-    (f) => f.startsWith('ort-wasm-simd-threaded') && (f.endsWith('.mjs') || f.endsWith('.wasm')),
-  );
-  if (files.length === 0) throw new Error(`no ort wasm files in ${ORT_SRC}; run pnpm install first`);
-  for (const f of files) copyFileSync(join(ORT_SRC, f), join(ORT_DIR, f));
-  console.log(`ort: ${files.length} files → public/ort/`);
-}
-
 await ensureModel();
-ensureOrt();
