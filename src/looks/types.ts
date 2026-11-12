@@ -10,7 +10,7 @@ export interface ParamDef {
   default: number;
 }
 
-export type ReadingKind = 'drums' | 'tempo' | 'spectrum' | 'chords' | 'bass' | 'key';
+export type ReadingKind = 'drums' | 'tempo' | 'spectrum' | 'chords' | 'bass' | 'key' | 'notes';
 
 /** 畫一幀需要的全部輸入。look 不得讀取這以外的狀態。 */
 export interface LookContext {

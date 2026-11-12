@@ -7,7 +7,15 @@ import { mixStems, type Stems } from './stems/types';
 import { tempoMapFromBpm } from './tempo';
 import type { Readings, SourceKind } from './types';
 
-export type Stage = 'decode' | 'separate' | 'spectrum' | 'rhythm' | 'drums' | 'chords' | 'bass';
+export type Stage =
+  | 'decode'
+  | 'separate'
+  | 'spectrum'
+  | 'rhythm'
+  | 'drums'
+  | 'chords'
+  | 'bass'
+  | 'notes';
 export type Progress = (stage: Stage, fraction: number) => void;
 
 export interface AnalyzeOptions {

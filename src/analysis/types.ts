@@ -67,6 +67,21 @@ export interface BassNote {
   bends: { time: number; semitones: number }[];
 }
 
+/**
+ * 一顆音（鋼琴捲用）：MIDI 非鼓軌全部攤平，或 Basic Pitch 從音檔轉譜。
+ * 以 time 排序；同一個 midi 的音不重疊。
+ */
+export interface NoteEvent {
+  /** 秒 */
+  time: number;
+  /** 秒 */
+  duration: number;
+  /** 整數 0–127 */
+  midi: number;
+  /** 0..1 */
+  velocity: number;
+}
+
 export interface KeyInfo {
   tonic: number;
   mode: 'major' | 'minor';
@@ -83,6 +98,8 @@ export interface Readings {
   chords?: ChordEvent[];
   bass?: BassNote[];
   key?: KeyInfo;
+  /** 每一顆音（MIDI 非鼓軌，或轉譜） */
+  notes?: NoteEvent[];
   /** 純音訊節拍分析的結果（有的話），給 BPM 候選與第一拍微調用 */
   rhythm?: RhythmInfo;
   /** 每個欄位是哪裡來的 */
@@ -96,4 +113,6 @@ export interface ReadingsSource {
   chords: SourceKind;
   bass: SourceKind;
   key: SourceKind;
+  /** 舊專案／舊快取沒有這欄，所以可省略；省略等於 'none' */
+  notes?: SourceKind;
 }

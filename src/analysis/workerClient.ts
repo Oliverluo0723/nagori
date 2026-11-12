@@ -1,7 +1,10 @@
 import { analyzeAudio, type Progress } from './analyzeAudio';
+import { type NoteStore, noteKey, OpfsNoteStore, opfsAvailable } from './audio/noteCache';
+import { NOTE_THRESHOLDS, thresholdsKey } from './audio/notes';
+import { NOTES_MODEL_MISSING, type TranscribeFn, transcribeNotes } from './audio/transcribe';
 import { type SeparateOptions, separateStems } from './stems/separate';
-import type { Stems } from './stems/types';
-import type { Readings } from './types';
+import { mixStems, type Stems } from './stems/types';
+import type { NoteEvent, Readings } from './types';
 
 export interface AnalyzeInput {
   /** 單聲道混音 */
@@ -38,6 +41,63 @@ export interface AnalysisOutcome {
   separated: boolean;
   /** 要分軌卻分不成（模型不在、ORT 載不起來）時的錯誤訊息 */
   separationError?: string;
+  /** 轉譜不成（模型不在、tfjs 載不起來）時的錯誤訊息；notes 會是空的 */
+  notesError?: string;
+}
+
+/** 轉譜這一段可以換掉的零件（測試注入假的轉譜器與記憶體快取） */
+export interface NotesDeps {
+  transcribe?: TranscribeFn;
+  /** 預設：有 OPFS 用 OpfsNoteStore，沒有（Node）就不快取 */
+  store?: NoteStore;
+}
+
+let defaultStore: NoteStore | undefined;
+function storeFor(deps: NotesDeps): NoteStore | undefined {
+  if (deps.store) return deps.store;
+  if (!opfsAvailable()) return undefined;
+  defaultStore ??= new OpfsNoteStore();
+  return defaultStore;
+}
+
+/**
+ * 轉譜階段（Stage 'notes'）：有分軌餵 bass + other（去掉鼓的泛音和人聲的滑音），沒有就餵混音。
+ * 先查快取（key = 餵進去那份 PCM 的雜湊 + 門檻）；轉不成就回空陣列與錯誤訊息，不擋整個分析。
+ */
+export async function transcribeStage(
+  pcm: Float32Array,
+  sampleRate: number,
+  stems: Stems | undefined,
+  onProgress: Progress,
+  deps: NotesDeps = {},
+): Promise<{ notes: NoteEvent[]; error?: string }> {
+  onProgress('notes', 0);
+  const feed = stems ? mixStems(stems, ['bass', 'other']) : pcm;
+  const store = storeFor(deps);
+  let key: string | undefined;
+  try {
+    if (store) {
+      key = await noteKey(feed, thresholdsKey(NOTE_THRESHOLDS));
+      const hit = await store.get(key);
+      if (hit) {
+        onProgress('notes', 1);
+        return { notes: hit };
+      }
+    }
+    const notes = await (deps.transcribe ?? transcribeNotes)(feed, sampleRate, {
+      thresholds: NOTE_THRESHOLDS,
+      onProgress: (f) => onProgress('notes', f),
+    });
+    if (store && key)
+      await store.put(key, notes).catch((err) => console.warn('notes cache write failed', err));
+    onProgress('notes', 1);
+    return { notes };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    // 沒模型是預期中的情況（沒跑 setup:models、Node 測試），不吵
+    if (!error.startsWith(NOTES_MODEL_MISSING)) console.warn('transcription failed; no notes', err);
+    return { notes: [], error };
+  }
 }
 
 /**
@@ -50,6 +110,7 @@ export async function runAnalysis(
   onProgress: Progress,
   onStems?: (stems: Stems) => void,
   separateFn: SeparateFn = separateStems,
+  notesDeps: NotesDeps = {},
 ): Promise<AnalysisOutcome> {
   let stems = input.stems;
   let separationError: string | undefined;
@@ -66,8 +127,23 @@ export async function runAnalysis(
       stems = undefined;
     }
   }
-  const readings = await analyzeAudio(input.pcm, input.sampleRate, onProgress, { stems });
-  return { readings, separated: stems !== undefined, separationError };
+  const audio = await analyzeAudio(input.pcm, input.sampleRate, onProgress, { stems });
+  const { notes, error: notesError } = await transcribeStage(
+    input.pcm,
+    input.sampleRate,
+    stems,
+    onProgress,
+    notesDeps,
+  );
+  const readings: Readings = {
+    ...audio,
+    notes,
+    source: audio.source && {
+      ...audio.source,
+      notes: notes.length ? (stems ? 'stem' : 'audio') : 'none',
+    },
+  };
+  return { readings, separated: stems !== undefined, separationError, notesError };
 }
 
 /** 不開 Worker 的版本（測試、退路）；多一個 separateFn 可注入 */
@@ -78,8 +154,9 @@ export const analyzeInline = async (
   onSeparationError?: (message: string) => void,
   _signal?: AbortSignal,
   separateFn: SeparateFn = separateStems,
+  notesDeps: NotesDeps = {},
 ): Promise<Readings> => {
-  const out = await runAnalysis(input, onProgress, onStems, separateFn);
+  const out = await runAnalysis(input, onProgress, onStems, separateFn, notesDeps);
   if (out.separationError) onSeparationError?.(out.separationError);
   return out.readings;
 };
