@@ -123,17 +123,19 @@ export function bassPitchFrames(input: Float32Array, sampleRate: number): BassFr
     sorted.sort();
     const floor = sorted[sorted.length >> 1];
     for (let b = 0; b <= topBin + 1; b++) c[b] = Math.max(0, Math.sqrt(mag[b]) - floor);
+    // 在格子之間線性內插：低音區一個格子就是一個半音，取 floor/floor+1 的最大值會把音高拉低半個半音
+    const at = (x: number) => {
+      const i0 = Math.floor(x);
+      const fr = x - i0;
+      return c[i0] * (1 - fr) + c[i0 + 1] * fr;
+    };
     let best = -1;
     let bestScore = 0;
     let sum = 0;
     for (let k = 0; k < cands.length; k++) {
       const bins = harmBins[k];
       let s = 0;
-      for (let h = 0; h < HARMONICS; h++) {
-        const x = bins[h];
-        const i0 = Math.floor(x);
-        s += weights[h] * Math.max(c[i0], c[i0 + 1]);
-      }
+      for (let h = 0; h < HARMONICS; h++) s += weights[h] * at(bins[h]);
       scores[k] = s;
       sum += s;
       if (s > bestScore) {
@@ -149,21 +151,13 @@ export function bassPitchFrames(input: Float32Array, sampleRate: number): BassFr
     // 諧波度：泛音格點上的能量 vs 泛音中間點（(h+½)·f）的能量；kick 這種寬頻聲兩者差不多
     let between = 0;
     const bb = harmBins[best];
-    for (let h = 0; h < HARMONICS - 1; h++) {
-      const x = (bb[h] + bb[h + 1]) / 2;
-      const i0 = Math.floor(x);
-      between += weights[h] * Math.max(c[i0], c[i0 + 1]);
-    }
+    for (let h = 0; h < HARMONICS - 1; h++) between += weights[h] * at((bb[h] + bb[h + 1]) / 2);
     const harm = bestScore / (bestScore + between);
     // 基頻本身要有能量：pad、string、fx 坐在 150–300 Hz 時，泛音加總會把它們往下折一個八度；
     // 那個「低八度」的基頻格子是空的，靠這個分辨
     let partMax = 0;
-    for (let h = 0; h < HARMONICS; h++) {
-      const i0 = Math.floor(bb[h]);
-      partMax = Math.max(partMax, c[i0], c[i0 + 1]);
-    }
-    const f0 = Math.floor(bb[0]);
-    const fund = partMax > 0 ? Math.max(c[f0], c[f0 + 1]) / partMax : 0;
+    for (let h = 0; h < HARMONICS; h++) partMax = Math.max(partMax, at(bb[h]));
+    const fund = partMax > 0 ? at(bb[0]) / partMax : 0;
     // 拋物線內插（在候選格點上）
     const a = scores[best - 1] ?? scores[best];
     const b0 = scores[best];

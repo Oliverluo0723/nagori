@@ -27,6 +27,15 @@ test('a constant bass of midi 40 without drums gives only 40s', () => {
   for (const n of notes) expect(n.midi).toBe(40);
 });
 
+test('a low constant bass of midi 31 (49 Hz, one FFT bin per semitone) is not read flat', () => {
+  const notes = detectBass(
+    synthBeat({ bars: 2, drums: false, bass: [31, 31, 31, 31], chords: [[]] }),
+    SR,
+  );
+  expect(notes.length).toBeGreaterThan(0);
+  for (const n of notes) expect(n.midi, `note at ${n.time.toFixed(2)}`).toBe(31);
+});
+
 test('silence gives no notes; frames report null pitch (review focus 3)', () => {
   const silent = new Float32Array(SR * 3);
   expect(detectBass(silent, SR)).toEqual([]);
