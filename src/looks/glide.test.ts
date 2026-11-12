@@ -65,7 +65,8 @@ test('a bent note is drawn as a polyline with bends + 2 points', () => {
   glideLook.draw(p, ctx(0.5, [bent]));
   const poly = p.ops.find((o) => o.op === 'polyline');
   expect(poly).toBeDefined();
-  expect((poly?.args[0] as unknown[]).length).toBe(4);
+  const pts = poly?.args[0] as unknown[] | undefined;
+  expect(pts?.length).toBe(4);
 });
 
 test('no bass: grid lines and note names only, no dot (review focus 1)', () => {
