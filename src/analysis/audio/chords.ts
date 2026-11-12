@@ -67,10 +67,9 @@ export function smoothChords(raw: RawChord[], beats: number[]): ChordEvent[] {
   }
   // 3. 邊界吸到拍
   const events: ChordEvent[] = [];
-  for (let i = 0; i < merged.length; i++) {
-    const r = merged[i];
-    const start =
-      i === 0 ? snapToBeat(r.start, beats) : events[i - 1].time + events[i - 1].duration;
+  for (const r of merged) {
+    const prev = events[events.length - 1];
+    const start = prev ? prev.time + prev.duration : snapToBeat(r.start, beats);
     const end = snapToBeat(r.end, beats);
     const info = chordFromName(r.name);
     if (!info || end <= start) continue;

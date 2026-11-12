@@ -56,3 +56,19 @@ test('silence gives no chords and no key (review focus 3)', async () => {
   expect(chords).toEqual([]);
   expect(key).toBeUndefined();
 }, 60000);
+
+test('smoothChords survives an event that snaps to zero length (regression: index drift)', () => {
+  const beats = beatsEvery(0.5, 4);
+  const out = smoothChords(
+    [
+      { name: 'D', start: 0, end: 1.0 },
+      { name: 'G', start: 1.0, end: 1.2 }, // 短於半拍：併入 D
+      { name: 'A', start: 1.2, end: 2.0 },
+      { name: 'Bm', start: 2.0, end: 4.0 },
+    ],
+    beats,
+  );
+  expect(out.map((c) => c.name)).toEqual(['D', 'A', 'Bm']);
+  for (let i = 1; i < out.length; i++)
+    expect(out[i].time).toBeCloseTo(out[i - 1].time + out[i - 1].duration);
+});

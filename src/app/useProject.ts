@@ -91,7 +91,8 @@ export async function loadDroppedFiles(files: File[], deps: LoadDeps): Promise<L
       audioUrl: createUrl(audio),
       name: audio.name.replace(/\.[^.]+$/, ''),
     };
-  } catch {
+  } catch (err) {
+    console.error('load failed', err);
     return { ok: false, reason: 'parse-failed' };
   }
 }
