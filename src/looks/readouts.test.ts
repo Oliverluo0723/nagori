@@ -17,7 +17,7 @@ test('sheet looks read PRINTED / PEN / TIME', () => {
 
 test('drum looks count the hits so far, then bar and tempo; at most four columns', () => {
   const drums = [0.5, 1, 1.5, 9].map((time) => ({ time, kind: 'kick' as const, velocity: 1 }));
-  const r = readoutsFor(looks.rings, makeCtx(2.1, { drums }));
+  const r = readoutsFor(looks.grid, makeCtx(2.1, { drums }));
   expect(r[0]).toEqual({ label: 'HITS', value: '3' });
   expect(r.find((c) => c.label === 'TEMPO')?.value).toBe('120 BPM');
   expect(r.find((c) => c.label === 'BAR')?.value).toBe('2.1');

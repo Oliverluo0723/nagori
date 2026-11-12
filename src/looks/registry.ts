@@ -11,6 +11,7 @@ import { gelLook } from './gel';
 import { glideLook } from './glide';
 import { glyphLook } from './glyph';
 import { gridLook } from './grid';
+import { grooveLook } from './groove';
 import { kaleidoLook } from './kaleido';
 import { lidarLook } from './lidar';
 import { meshLook } from './mesh';
@@ -49,4 +50,5 @@ export const looks: Record<string, Look> = {
   [cometLook.id]: cometLook,
   [starsLook.id]: starsLook,
   [flowLook.id]: flowLook,
+  [grooveLook.id]: grooveLook,
 };
