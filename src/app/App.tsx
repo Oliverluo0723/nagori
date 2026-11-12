@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Stage } from '../analysis/analyzeAudio';
 import { bpmAt } from '../analysis/tempo';
+import type { SourceKind } from '../analysis/types';
 import { themes } from '../compose/themes';
 import type { Composition } from '../compose/types';
 import { looks } from '../looks/registry';
@@ -14,6 +15,13 @@ const ERROR_TEXT = {
   'parse-failed': '解析失敗',
   'no-beat': '分析不到節拍',
 } as const;
+
+const SOURCE_TEXT: Record<SourceKind, string> = {
+  midi: 'MIDI',
+  audio: '音訊',
+  stem: '分軌',
+  none: '無',
+};
 
 const STAGE_TEXT: Record<Stage, string> = {
   decode: '解碼音檔',
@@ -152,7 +160,7 @@ export function App() {
             <dd style={{ fontSize: 11 }}>
               {ready.readings.source
                 ? Object.entries(ready.readings.source)
-                    .map(([k, v]) => `${k}:${v}`)
+                    .map(([k, v]) => `${k}:${SOURCE_TEXT[v as SourceKind]}`)
                     .join(' ')
                 : '–'}
             </dd>

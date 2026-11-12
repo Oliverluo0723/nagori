@@ -1,11 +1,13 @@
 import { useCallback, useState } from 'react';
 import { analyzeMidi, withSpectrum } from '../analysis/analyze';
-import { analyzeAudio, type Progress, type Stage } from '../analysis/analyzeAudio';
+import type { Progress, Stage } from '../analysis/analyzeAudio';
 import { decodeAudio } from '../analysis/audio/decode';
 import { analyzeSpectrum } from '../analysis/audio/spectrum';
 import { mergeReadings } from '../analysis/merge';
+import { OpfsStemStore, type StemStore, stemKey } from '../analysis/stems/cache';
 import { tempoMapFromBpm } from '../analysis/tempo';
 import type { Readings } from '../analysis/types';
+import { type AnalyzeFn, analyzeInline, analyzeInWorker } from '../analysis/workerClient';
 
 const AUDIO_EXT = ['mp3', 'wav', 'aiff', 'aif', 'flac', 'm4a', 'ogg'];
 const MIDI_EXT = ['mid', 'midi'];
@@ -19,16 +21,18 @@ export interface LoadDeps {
   getDuration: (audio: File) => Promise<number>;
   createUrl?: (audio: File) => string;
   /** 有給就解碼音檔；Node 測試注入合成的 pcm（left/right 可省，省了就拿 pcm 當左右）。 */
-  decode?: (
-    audio: File,
-  ) => Promise<{
+  decode?: (audio: File) => Promise<{
     pcm: Float32Array;
     sampleRate: number;
     left?: Float32Array;
     right?: Float32Array;
   }>;
-  /** 純音訊分析（沒有 .mid 或 .mid 缺角色軌時用）；預設 analyzeAudio */
-  analyze?: (pcm: Float32Array, sampleRate: number, onProgress: Progress) => Promise<Readings>;
+  /** 純音訊分析（沒有 .mid 或 .mid 缺角色軌時用）；預設在 Worker 裡跑 */
+  analyze?: AnalyzeFn;
+  /** 分軌快取；預設 OPFS，Node 測試給 MemoryStemStore */
+  stemStore?: StemStore;
+  /** 要不要分軌（預設要） */
+  separate?: boolean;
   onProgress?: Progress;
 }
 
@@ -67,15 +71,33 @@ export async function loadDroppedFiles(files: File[], deps: LoadDeps): Promise<L
       // 音檔解不開：有 MIDI 就照常用 MIDI，沒有就失敗
       try {
         progress('decode', 0);
-        const { pcm, sampleRate } = await deps.decode(audio);
+        const { pcm, sampleRate, left, right } = await deps.decode(audio);
         const needsAudio =
           !midiReadings ||
           midiReadings.drums.length === 0 ||
           (midiReadings.chords?.length ?? 0) === 0 ||
           (midiReadings.bass?.length ?? 0) === 0;
         if (needsAudio || !midiReadings) {
-          const analyze = deps.analyze ?? analyzeAudio;
-          audioReadings = await analyze(pcm, sampleRate, progress);
+          // 沒有 Worker 的環境（Node 測試）就在這條執行緒跑
+          const analyze =
+            deps.analyze ?? (typeof Worker === 'undefined' ? analyzeInline : analyzeInWorker);
+          const store = deps.stemStore ?? new OpfsStemStore();
+          const key = await stemKey(await audio.arrayBuffer());
+          const cached = await store.get(key);
+          audioReadings = await analyze(
+            {
+              pcm,
+              sampleRate,
+              left: left ?? pcm,
+              right: right ?? pcm,
+              stems: cached,
+              separate: deps.separate !== false && !cached,
+            },
+            progress,
+            (stems) => {
+              store.put(key, stems).catch((err) => console.warn('stem cache write failed', err));
+            },
+          );
         } else {
           audioReadings = withSpectrum(
             { ...midiReadings, drums: [], chords: [], bass: [], key: undefined, source: undefined },
