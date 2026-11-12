@@ -1,6 +1,8 @@
 import type { Readings } from '../analysis/types';
+import { readoutsFor } from '../looks/readouts';
 import { looks } from '../looks/registry';
 import type { Look, LookContext } from '../looks/types';
+import { drawFrame, frameLayout } from './frame';
 import type { SurfaceProvider } from './surface';
 import { themes } from './themes';
 import type { Cell, Composition, LayoutNode } from './types';
@@ -73,25 +75,40 @@ export function renderFrame(opts: RenderFrameOptions): void {
   const theme = themes[composition.themeId];
   if (!theme) throw new Error(`unknown theme: ${composition.themeId}`);
 
+  const withTitle = composition.root.kind === 'cell' && !!composition.title;
   for (const rect of layoutCells(composition.root, target.w, target.h)) {
     const cell = findCell(composition.root, rect.id);
     if (!cell) continue;
     const look = looks[cell.lookId];
     if (!look) throw new Error(`unknown look: ${cell.lookId}`);
-    const surface = surfaces.get(cell.id, rect.w, rect.h);
+    const layout = frameLayout(rect.w, rect.h, withTitle);
+    const { plot } = layout;
+    // look 只看得到繪圖框：它的 w/h 就是框的大小，標籤改由外框畫
+    const surface = surfaces.get(cell.id, plot.w, plot.h);
     const ctx: LookContext = {
       t,
-      w: rect.w,
-      h: rect.h,
+      w: plot.w,
+      h: plot.h,
       readings,
       theme,
       params: paramsWithDefaults(look, cell.params),
       seed: hashString(cell.id),
-      label: labelOf(look),
     };
     look.draw(surface.painter, ctx);
-    if (target.ctx && surface.image) {
-      target.ctx.drawImage(surface.image, rect.x, rect.y, rect.w, rect.h);
+    const frame = surfaces.get(`${cell.id}:frame`, rect.w, rect.h);
+    drawFrame(frame.painter, {
+      w: rect.w,
+      h: rect.h,
+      theme,
+      layout,
+      title: withTitle ? composition.title : undefined,
+      number: look.number,
+      name: look.id,
+      readouts: readoutsFor(look, ctx),
+    });
+    if (target.ctx && frame.image && surface.image) {
+      target.ctx.drawImage(frame.image, rect.x, rect.y, rect.w, rect.h);
+      target.ctx.drawImage(surface.image, rect.x + plot.x, rect.y + plot.y, plot.w, plot.h);
     }
   }
 }

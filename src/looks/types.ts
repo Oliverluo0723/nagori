@@ -25,6 +25,12 @@ export interface LookContext {
   label?: string;
 }
 
+/** 面板左下讀數列的一欄，例如 { label: 'TEMPO', value: '137 BPM' }。 */
+export interface Readout {
+  label: string;
+  value: string;
+}
+
 export interface Look {
   id: string;
   number: number;
@@ -32,4 +38,6 @@ export interface Look {
   listens: ReadingKind[];
   params: ParamDef[];
   draw(p: Painter, ctx: LookContext): void;
+  /** 自訂讀數列；沒給就由 readoutsFor 依 listens 組。 */
+  readouts?(ctx: LookContext): Readout[];
 }

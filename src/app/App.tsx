@@ -80,13 +80,15 @@ export function App() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const previewRef = useRef<Preview | null>(null);
 
+  const songTitle = state.status === 'ready' ? state.name : undefined;
   const composition = useMemo<Composition>(
     () => ({
       aspect: { w: 9, h: 16 },
       root: { kind: 'cell', id: 'c1', lookId, params: {} },
       themeId,
+      title: songTitle,
     }),
-    [themeId, lookId],
+    [themeId, lookId, songTitle],
   );
 
   useEffect(() => {

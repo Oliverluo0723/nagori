@@ -1,0 +1,22 @@
+/* 畫布用的字型，跟著專案走（OFL，授權在同目錄）。canvas 不會等字型，main.tsx 先 load 完才開始畫。 */
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+  src: url("./fonts/inter-latin-wght.woff2") format("woff2-variations");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("./fonts/jetbrains-mono-latin-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url("./fonts/jetbrains-mono-latin-700.woff2") format("woff2");
+}

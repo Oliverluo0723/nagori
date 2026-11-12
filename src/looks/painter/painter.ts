@@ -3,6 +3,8 @@ export interface TextStyle {
   font: 'sans' | 'mono';
   align?: 'left' | 'center' | 'right';
   weight?: 400 | 700;
+  /** 字距，以字級為單位（-0.04 = 收緊 4%）。預設 0。 */
+  tracking?: number;
 }
 
 /**

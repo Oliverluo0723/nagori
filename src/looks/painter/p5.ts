@@ -70,6 +70,8 @@ export class P5Painter implements Painter {
     // p5 2.x 的 Graphics 物件上沒有 RIGHT/TOP 這些常數屬性，直接用常數的字串值
     this.g.textStyle(style.weight === 700 ? 'bold' : 'normal');
     this.g.textAlign(style.align ?? 'left', 'top');
+    // 每次都設，避免上一段文字的字距殘留
+    this.g.textProperty('letterSpacing', `${(style.tracking ?? 0) * style.size}px`);
     this.g.text(s, x, y);
   }
   wedge(
