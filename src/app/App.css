@@ -1,0 +1,499 @@
+:root {
+  --bg: #0b0b0b;
+  --panel: #111;
+  --raised: #1a1a1a;
+  --line: #242424;
+  --line-strong: #383838;
+  --text: #efece4;
+  --muted: #8a8780;
+  --faint: #55534f;
+  --accent: #ff4a1c;
+  --radius: 8px;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --gap: 16px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font:
+    14px / 1.45 Inter,
+    system-ui,
+    -apple-system,
+    "PingFang TC",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr) 300px;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app.dragging::after {
+  content: "放開以載入";
+  position: fixed;
+  inset: 12px;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--accent);
+  border-radius: 16px;
+  background: rgb(11 11 11 / 0.85);
+  color: var(--accent);
+  font-size: 20px;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* ---------- 側欄 ---------- */
+.panel {
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.panel--left {
+  border-right: 1px solid var(--line);
+  padding: 20px;
+  gap: 20px;
+  overflow-y: auto;
+}
+
+.panel--right {
+  border-left: 1px solid var(--line);
+}
+
+.logo {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.logo span {
+  color: var(--accent);
+}
+
+.section-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 8px;
+}
+
+.drop {
+  display: grid;
+  gap: 4px;
+  place-items: center;
+  text-align: center;
+  padding: 18px 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.drop:hover,
+.drop:focus-within {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.drop strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.drop input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.progress {
+  height: 3px;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.progress > div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s;
+}
+
+.status {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+}
+
+.error {
+  color: var(--accent);
+  font-size: 13px;
+  margin: 0;
+}
+
+.song-name {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 12px;
+  word-break: break-word;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin: 0;
+}
+
+.stats > div {
+  background: var(--panel);
+  padding: 8px 10px;
+}
+
+.stats dt {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.stats dd {
+  margin: 2px 0 0;
+  font-family: var(--mono);
+  font-size: 15px;
+}
+
+.source {
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 10px;
+  margin: 8px 0 0;
+}
+
+details.tune summary {
+  cursor: pointer;
+  list-style: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+details.tune summary::before {
+  content: "▸ ";
+}
+
+details.tune[open] summary::before {
+  content: "▾ ";
+}
+
+details.tune > div {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  background: var(--raised);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-family: var(--mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--muted);
+}
+
+.chip.on {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+
+.hint-keys {
+  margin-top: auto;
+  color: var(--faint);
+  font-size: 11px;
+}
+
+kbd {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 1px 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  color: var(--muted);
+}
+
+/* ---------- 舞台 ---------- */
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 24px 24px 16px;
+  gap: 14px;
+}
+
+.frame {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.canvas-host {
+  height: 100%;
+  max-width: 100%;
+  aspect-ratio: 9 / 16;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+  box-shadow:
+    0 0 0 1px var(--line),
+    0 20px 60px rgb(0 0 0 / 0.6);
+}
+
+/* 畫布只縮放顯示，解析度不變（App 建好 preview 後把 inline 尺寸改成 100%） */
+.canvas-host canvas {
+  display: block;
+}
+
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 520px;
+}
+
+.play {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  color: #0f0f0f;
+  font-size: 16px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform 0.1s;
+}
+
+.play:hover:not(:disabled) {
+  transform: scale(1.06);
+}
+
+.play:disabled {
+  background: var(--raised);
+  color: var(--faint);
+  cursor: default;
+}
+
+.transport-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.transport-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.transport-title span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transport-title span:last-child {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  flex: none;
+}
+
+/* ---------- Look 選單 ---------- */
+.right-head {
+  padding: 20px 16px 12px;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 14px;
+}
+
+.segmented {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 3px;
+}
+
+.segmented button {
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.segmented button.on {
+  background: var(--text);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+.look-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 16px 20px;
+}
+
+.look-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.look-group-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 14px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.look-group-head small {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.look {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  text-align: left;
+  background: var(--raised);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 9px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    background 0.12s;
+}
+
+.look:hover {
+  border-color: var(--line-strong);
+}
+
+.look.on {
+  background: rgb(255 74 28 / 0.12);
+  border-color: var(--accent);
+}
+
+.look-num {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.look-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.look-count {
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 窄螢幕：look 欄移到下面 */
+@media (max-width: 900px) {
+  .app {
+    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 220px;
+  }
+  .panel--left {
+    grid-row: 1 / span 2;
+  }
+  .panel--right {
+    border-left: none;
+    border-top: 1px solid var(--line);
+  }
+  .look-group {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+}
