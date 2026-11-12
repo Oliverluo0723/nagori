@@ -29,7 +29,11 @@ test('grid dots, printed hits only, playhead ring', () => {
   expect(opsOf(p, 'circle')).toHaveLength(GRID_DOTS + 2 + 1 + 1 + 1);
   expect(hasText(p, '13 BLOT')).toBe(true);
   expect(hasText(p, 'bars 1–6')).toBe(true);
-  expect(opsOf(p, 'glow').length).toBeGreaterThan(0);
+  // glow 只給剛落下 0.3 秒內的 kick
+  expect(opsOf(p, 'glow')).toHaveLength(0);
+  const fresh = new RecordingPainter();
+  blotLook.draw(fresh, makeCtx(0.2, { drums: hits }));
+  expect(opsOf(fresh, 'glow')).toHaveLength(1);
 });
 
 test('a blot keeps spreading after it lands', () => {

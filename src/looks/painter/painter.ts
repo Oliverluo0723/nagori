@@ -15,7 +15,11 @@ export interface Painter {
   noFill(): void;
   stroke(color: string, weight: number, alpha?: number): void;
   noStroke(): void;
-  /** blur 單位 px；主題 glow=false 時實作可以忽略。 */
+  /**
+   * blur 單位 px；主題 glow=false 時實作可以忽略。
+   * 代價很高：canvas 的 shadowBlur 每個圖形都要在 GPU 上模糊一次，幾百個就會掉到 15 fps。
+   * 一幀最多用在幾十個圖形上；大量粒子請用 sheet.ts 的 softDot（光暈圓 + 核心圓）。
+   */
   glow(color: string, blur: number): void;
   noGlow(): void;
   circle(x: number, y: number, d: number): void;

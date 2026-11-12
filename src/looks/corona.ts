@@ -52,15 +52,15 @@ function draw(p: Painter, ctx: LookContext): void {
       const angle = angleOf(from);
       const current = from >= t - beat / perBeat;
       if (current) {
-        // 正在印的那根是墨色指針
+        // 正在印的那根是墨色指針（只有這一根用 glow）
+        if (theme.glow) p.glow(theme.accent, h * 0.004);
         p.stroke(theme.ink, h * 0.0012);
         ray(angle, inner * 0.6, inner + unit * LENGTH * Math.max(e, 0.15));
+        if (theme.glow) p.noGlow();
         continue;
       }
-      if (theme.glow) p.glow(theme.accent, h * 0.003);
       p.stroke(theme.accent, h * 0.0009);
       ray(angle, inner, inner + unit * LENGTH * e);
-      if (theme.glow) p.noGlow();
       if (hi > 0.02) {
         p.stroke(theme.ink, h * 0.0005, 0.6);
         ray(angle, inner, inner + unit * LENGTH * hi);

@@ -1,5 +1,14 @@
 import type { Painter } from './painter/painter';
-import { BANDS7, bandSeries, barTimes, drawLabel, meanOver, paramNum, rngFor } from './sheet';
+import {
+  BANDS7,
+  bandSeries,
+  barTimes,
+  drawLabel,
+  meanOver,
+  paramNum,
+  rngFor,
+  softDot,
+} from './sheet';
 import type { Look, LookContext, ParamDef } from './types';
 
 const params: ParamDef[] = [
@@ -64,10 +73,7 @@ function draw(p: Painter, ctx: LookContext): void {
             Math.min(size * 6, y - top),
           );
           // 露珠
-          if (theme.glow) p.glow(color, size * 1.5);
-          p.fill(color, 0.9 * (1 - u * 0.6));
-          p.circle(x, y, size);
-          if (theme.glow) p.noGlow();
+          softDot(p, theme, x, y, size, color, 0.9 * (1 - u * 0.6));
         }
       }
     }

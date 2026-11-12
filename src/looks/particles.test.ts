@@ -101,10 +101,11 @@ test('dew: drops only on threads of bands with energy, and they fall over time',
   expect(first(q)).toBeGreaterThan(first(p));
 });
 
-test('kaleido: each particle appears 2 × segments times; old hits vanish', () => {
+test('kaleido: each particle appears 2 × segments times (halo + core on dark); old hits vanish', () => {
   const p = new RecordingPainter();
   kaleidoLook.draw(p, makeCtx(1.1, { drums: [hits[0]] }, { params: { segments: 6 } }));
-  expect(opsOf(p, 'circle')).toHaveLength(6 * 12);
+  expect(opsOf(p, 'circle')).toHaveLength(6 * 12 * 2);
+  expect(opsOf(p, 'glow')).toHaveLength(0);
   const q = new RecordingPainter();
   kaleidoLook.draw(q, makeCtx(10, { drums: [hits[0]] }));
   expect(opsOf(q, 'circle')).toHaveLength(0);

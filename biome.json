@@ -8,7 +8,8 @@
       "*.json",
       "!**/node_modules",
       "!dist",
-      "!.superpowers"
+      "!.superpowers",
+      "!.claude"
     ]
   },
   "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },

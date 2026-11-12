@@ -67,12 +67,10 @@ function draw(p: Painter, ctx: LookContext): void {
     const age = t - hit.time;
     const flash = age < FLASH ? 1 - age / FLASH : 0;
     const color = hit.kind === 'kick' ? theme.accent : theme.ink;
-    if (theme.glow) p.glow(color, size * (1.5 + 3 * flash));
     p.fill(color, 0.5 + 0.5 * flash);
     p.circle(x, y, size * 2.4 * (0.5 + flash));
     p.fill(theme.ink);
     p.circle(x, y, size);
-    if (theme.glow) p.noGlow();
   }
 
   // 小節號

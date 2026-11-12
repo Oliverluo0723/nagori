@@ -163,3 +163,24 @@ export function bassAt(
   }
   return hold ? held : null;
 }
+
+/**
+ * 便宜的發光點：一圈大的低透明度光暈加一顆實心核心，不用 shadowBlur。
+ * 大量粒子一律用這個；主題不發光時只畫核心。
+ */
+export function softDot(
+  p: Painter,
+  theme: { glow: boolean },
+  x: number,
+  y: number,
+  d: number,
+  color: string,
+  alpha = 1,
+): void {
+  if (theme.glow) {
+    p.fill(color, alpha * 0.28);
+    p.circle(x, y, d * 2.6);
+  }
+  p.fill(color, alpha);
+  p.circle(x, y, d);
+}

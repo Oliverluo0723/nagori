@@ -1,6 +1,6 @@
 import type { DrumKind } from '../analysis/types';
 import type { Painter } from './painter/painter';
-import { bandSeries, drawLabel, paramNum, rngFor, smoothAt, ticksAlive } from './sheet';
+import { bandSeries, drawLabel, paramNum, rngFor, smoothAt, softDot, ticksAlive } from './sheet';
 import type { Look, LookContext, ParamDef } from './types';
 
 const params: ParamDef[] = [
@@ -113,12 +113,7 @@ function draw(p: Painter, ctx: LookContext): void {
   p.ellipse(w / 2, floorY, w * 0.84, h * 0.04);
 
   p.noStroke();
-  if (theme.glow) p.glow(theme.ink, h * 0.006);
-  for (const sp of sparks) {
-    p.fill(sp.color, sp.alpha);
-    p.circle(sp.x, sp.y, sp.size);
-  }
-  if (theme.glow) p.noGlow();
+  for (const sp of sparks) softDot(p, theme, sp.x, sp.y, sp.size, sp.color, sp.alpha);
 
   drawLabel(p, ctx);
 }

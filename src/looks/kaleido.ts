@@ -1,7 +1,7 @@
 import type { DrumKind } from '../analysis/types';
 import { noteColor } from './music';
 import type { Painter } from './painter/painter';
-import { drawLabel, paramNum, rngFor } from './sheet';
+import { drawLabel, paramNum, rngFor, softDot } from './sheet';
 import type { Look, LookContext, ParamDef } from './types';
 
 const params: ParamDef[] = [
@@ -50,26 +50,27 @@ function draw(p: Painter, ctx: LookContext): void {
       (0.5 + 0.5 * hit.velocity) *
       (0.6 + 0.4 * fade);
     const n = PER_HIT[hit.kind];
-    if (theme.glow) p.glow(color, size);
     for (let j = 0; j < n; j++) {
       // 一顆粒子在一個扇形裡飛，阻力讓它慢下來
       const a0 = rng() * wedge;
       const v = SPEED[hit.kind] * (0.5 + rng()) * (0.5 + 0.5 * hit.velocity);
       const dist = unit * v * (1 - Math.exp(-age * 1.8)) + unit * 0.03;
       const wobble = Math.sin(age * 6 + rng() * 6.28) * unit * 0.01;
-      p.fill(color, fade);
       for (let m = 0; m < segments; m++) {
         for (const mirror of [1, -1]) {
           const a = base + m * wedge + mirror * a0;
-          p.circle(
+          softDot(
+            p,
+            theme,
             cx + Math.cos(a) * dist + Math.cos(a + 1.57) * wobble,
             cy + Math.sin(a) * dist + Math.sin(a + 1.57) * wobble,
             size,
+            color,
+            fade,
           );
         }
       }
     }
-    if (theme.glow) p.noGlow();
   }
 
   drawLabel(p, ctx);

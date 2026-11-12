@@ -66,10 +66,12 @@ function draw(p: Painter, ctx: LookContext): void {
       const d = h * (0.012 + 0.018 * hit.velocity) * size * spread;
       p.fill(theme.accent, 0.18);
       p.circle(x, y, d * 2.2);
-      if (theme.glow) p.glow(theme.accent, h * 0.012);
+      // glow 只給剛落下的那幾滴（shadowBlur 很貴，一頁幾十滴都 glow 會掉幀）
+      const fresh = theme.glow && age < 0.3;
+      if (fresh) p.glow(theme.accent, h * 0.012);
       p.fill(theme.accent, 0.9);
       p.circle(x, y, d);
-      if (theme.glow) p.noGlow();
+      if (fresh) p.noGlow();
     } else if (hit.kind === 'snare') {
       const d = h * (0.008 + 0.01 * hit.velocity) * size * spread;
       p.fill(theme.ink, 0.8);
