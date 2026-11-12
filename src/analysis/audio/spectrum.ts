@@ -11,10 +11,10 @@ export interface SpectrumOptions {
 
 const DEFAULTS = { fps: 50, bins: 64, fftSize: 2048, minHz: 30, maxHz: 16000 };
 
-/** dB → 0..1：clamp((dB + 90) / 70, 0, 1) */
+/** dB → 0..1：clamp((dB + 90) / 90, 0, 1)。0 dBFS 的滿幅正弦剛好 1，母帶很響的歌才不會整排頂到天花板。 */
 function normalizeDb(mag: number, n: number): number {
   const db = 20 * Math.log10(mag / n + 1e-9);
-  return Math.max(0, Math.min(1, (db + 90) / 70));
+  return Math.max(0, Math.min(1, (db + 90) / 90));
 }
 
 /** 整首歌離線算一次對數頻譜，每秒 fps 幀、每幀 bins 個 bin。 */

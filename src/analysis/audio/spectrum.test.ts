@@ -52,3 +52,15 @@ test('60 s of audio analyses in under 2 s', () => {
   expect(s.frameCount).toBe(3000);
   expect(ms).toBeLessThan(2000);
 });
+
+test('a full-scale sine reaches 1.0 without clipping the scale (0 dBFS = 1)', () => {
+  const s = analyzeSpectrum(sine(1000, 1, 1), SR);
+  const f = frameAt(s, 0.5);
+  let best = 0;
+  for (let b = 0; b < 64; b++) if (binValue(s, f, b) > binValue(s, f, best)) best = b;
+  expect(binValue(s, f, best)).toBeGreaterThan(0.9);
+  expect(binValue(s, f, best)).toBeLessThanOrEqual(1);
+  // 半幅（−6 dB）要明顯低於滿幅，表示沒有被 clamp 壓平
+  const half = analyzeSpectrum(sine(1000, 1, 0.5), SR);
+  expect(binValue(half, frameAt(half, 0.5), best)).toBeLessThan(binValue(s, f, best) - 0.04);
+});

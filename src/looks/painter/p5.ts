@@ -59,14 +59,9 @@ export class P5Painter implements Painter {
   text(s: string, x: number, y: number, style: TextStyle): void {
     this.g.textFont(FONTS[style.font]);
     this.g.textSize(style.size);
-    this.g.textStyle(style.weight === 700 ? this.g.BOLD : this.g.NORMAL);
-    const align =
-      style.align === 'center'
-        ? this.g.CENTER
-        : style.align === 'right'
-          ? this.g.RIGHT
-          : this.g.LEFT;
-    this.g.textAlign(align, this.g.TOP);
+    // p5 2.x 的 Graphics 物件上沒有 RIGHT/TOP 這些常數屬性，直接用常數的字串值
+    this.g.textStyle(style.weight === 700 ? 'bold' : 'normal');
+    this.g.textAlign(style.align ?? 'left', 'top');
     this.g.text(s, x, y);
   }
   wedge(
@@ -88,7 +83,7 @@ export class P5Painter implements Painter {
       const a = startRad + ((endRad - startRad) * i) / steps;
       g.vertex(cx + Math.cos(a) * rInner, cy + Math.sin(a) * rInner);
     }
-    g.endShape(g.CLOSE);
+    g.endShape('close');
   }
   polyline(points: Point[]): void {
     const g = this.g;
