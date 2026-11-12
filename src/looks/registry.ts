@@ -15,6 +15,8 @@ import { grooveLook } from './groove';
 import { kaleidoLook } from './kaleido';
 import { lidarLook } from './lidar';
 import { meshLook } from './mesh';
+import { paintLook } from './paint';
+import { pegboardLook } from './pegboard';
 import { polygraphLook } from './polygraph';
 import { ridgeLook } from './ridge';
 import { ringsLook } from './rings';
@@ -22,6 +24,7 @@ import { spectrumLook } from './spectrum';
 import { starsLook } from './stars';
 import { strataLook } from './strata';
 import { stringLook } from './string';
+import { trajectoryLook } from './trajectory';
 import type { Look } from './types';
 import { wheelLook } from './wheel';
 
@@ -51,4 +54,7 @@ export const looks: Record<string, Look> = {
   [starsLook.id]: starsLook,
   [flowLook.id]: flowLook,
   [grooveLook.id]: grooveLook,
+  [pegboardLook.id]: pegboardLook,
+  [trajectoryLook.id]: trajectoryLook,
+  [paintLook.id]: paintLook,
 };
