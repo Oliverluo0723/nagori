@@ -30,10 +30,46 @@ export interface TrackRoleAssignment {
   role: TrackRole;
 }
 
+/** 離線算好的對數頻譜：frameCount × bins，row-major，值 0..1。 */
+export interface Spectrum {
+  fps: number;
+  bins: number;
+  minHz: number;
+  maxHz: number;
+  frames: Float32Array;
+  frameCount: number;
+}
+
+/** 每拍判斷一次、相同名稱合併後的和弦事件。root、notes 都是 pitch class 0–11。 */
+export interface ChordEvent {
+  time: number;
+  duration: number;
+  root: number;
+  name: string;
+  notes: number[];
+}
+
+export interface BassNote {
+  time: number;
+  duration: number;
+  midi: number;
+  bends: { time: number; semitones: number }[];
+}
+
+export interface KeyInfo {
+  tonic: number;
+  mode: 'major' | 'minor';
+  name: string;
+}
+
 /** 一首歌分析一次的「樂曲讀數」。所有 look 只讀這份資料。 */
 export interface Readings {
   duration: number;
   tempo: TempoMap;
   drums: DrumHit[];
   roles: TrackRoleAssignment[];
+  spectrum?: Spectrum;
+  chords?: ChordEvent[];
+  bass?: BassNote[];
+  key?: KeyInfo;
 }
