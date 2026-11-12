@@ -47,10 +47,12 @@ export function App() {
   }, [composition]);
 
   useEffect(() => {
+    // 任何非 ready 的狀態（載入中、錯誤）都先停下舊歌，避免按鈕被停用時音樂還在放
+    previewRef.current?.pause();
+    setPlaying(false);
     if (state.status !== 'ready') return;
     const audio = audioRef.current;
     if (audio) audio.src = state.audioUrl;
-    setPlaying(false);
     previewRef.current?.setReadings(state.readings);
   }, [state]);
 
