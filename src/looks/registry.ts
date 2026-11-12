@@ -1,3 +1,4 @@
+import { arcadeLook } from './arcade';
 import { blotLook } from './blot';
 import { bodiesLook } from './bodies';
 import { cometLook } from './comet';
@@ -51,4 +52,5 @@ export const looks: Record<string, Look> = {
   [starsLook.id]: starsLook,
   [flowLook.id]: flowLook,
   [rollLook.id]: rollLook,
+  [arcadeLook.id]: arcadeLook,
 };
