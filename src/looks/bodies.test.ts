@@ -1,62 +1,70 @@
-import { Midi } from '@tonejs/midi';
 import { expect, test } from 'vitest';
-import { makeMidi } from '../../test/fixtures/midi';
-import { buildTempoMap } from '../analysis/tempo';
-import type { ChordEvent, Readings } from '../analysis/types';
+import { flatSpectrum, makeCtx, opsOf } from '../../test/fixtures/looks';
+import type { ChordEvent, DrumHit } from '../analysis/types';
 import { darkGlow, paperInk } from '../compose/themes';
-import { bodiesLook } from './bodies';
+import { BODY_BANDS, bodiesLook, orbits, PIECES, tearAt } from './bodies';
 import { RecordingPainter } from './painter/recording';
-import type { LookContext } from './types';
+import { looks } from './registry';
 
-const tempo = buildTempoMap(new Midi(makeMidi({ bpm: 120, tracks: [] })).header);
-const Bm: ChordEvent = { time: 0, duration: 2, root: 11, name: 'Bm', notes: [2, 6, 11] };
-const ctx = (t: number, chords?: ChordEvent[], theme = darkGlow): LookContext => ({
-  t,
-  w: 1080,
-  h: 1920,
-  readings: { duration: 60, tempo, drums: [], roles: [], chords } as Readings,
-  theme,
-  params: {},
-  seed: 1,
-  label: '05 BODIES',
+const Bm: ChordEvent = { time: 0, duration: 4, root: 11, name: 'Bm', notes: [2, 6, 11] };
+const kick = (time: number): DrumHit => ({ time, kind: 'kick', velocity: 1 });
+const draw = (t: number, readings = {}, extra = {}) => {
+  const p = new RecordingPainter();
+  bodiesLook.draw(p, makeCtx(t, readings, extra));
+  return p;
+};
+
+test('registry exposes bodies by id, number 5', () => {
+  expect(looks.bodies).toBe(bodiesLook);
+  expect(bodiesLook).toMatchObject({ id: 'bodies', number: 5 });
 });
-const ellipses = (p: RecordingPainter) => p.ops.filter((o) => o.op === 'ellipse');
 
 test('deterministic: same context gives identical ops', () => {
-  const a = new RecordingPainter();
-  const b = new RecordingPainter();
-  bodiesLook.draw(a, ctx(1, [Bm]));
-  bodiesLook.draw(b, ctx(1, [Bm]));
-  expect(a.ops).toEqual(b.ops);
+  const r = { chords: [Bm], drums: [kick(0.9)], spectrum: flatSpectrum(60, 0.4) };
+  expect(draw(1, r).ops).toEqual(draw(1, r).ops);
 });
 
-test('a three-note chord is nine ellipses (three layers each)', () => {
-  const p = new RecordingPainter();
-  bodiesLook.draw(p, ctx(1, [Bm]));
-  expect(ellipses(p)).toHaveLength(9);
-  expect(p.ops.some((o) => o.op === 'text' && o.args[0] === 'Bm')).toBe(true);
+test('six orbits with four tick marks each; the six bodies are built from shapes', () => {
+  const p = draw(1, { chords: [Bm] });
+  expect(opsOf(p, 'circle')).toHaveLength(BODY_BANDS.length);
+  expect(opsOf(p, 'line')).toHaveLength(BODY_BANDS.length * 4);
+  expect(opsOf(p, 'shape').length).toBeGreaterThanOrEqual(BODY_BANDS.length * PIECES);
+  expect(opsOf(p, 'haze')).toHaveLength(BODY_BANDS.length);
 });
 
-test('within one chord the body centres do not move between frames', () => {
-  const a = new RecordingPainter();
-  const b = new RecordingPainter();
-  bodiesLook.draw(a, ctx(1, [Bm]));
-  bodiesLook.draw(b, ctx(1.5, [Bm]));
-  const centres = (p: RecordingPainter) => ellipses(p).map((o) => [o.args[0], o.args[1]]);
-  expect(centres(a)).toEqual(centres(b));
+test('tall boxes stack the orbits 2×3, wide boxes 3×2', () => {
+  const tall = orbits(1, 984, 1600);
+  expect(new Set(tall.map((o) => Math.round(o.y / 400))).size).toBe(3);
+  const wide = orbits(1, 1600, 900);
+  expect(wide.filter((o) => o.y < 450)).toHaveLength(3);
 });
 
-test('paper theme never calls glow', () => {
-  const p = new RecordingPainter();
-  bodiesLook.draw(p, ctx(1, [Bm], paperInk));
+test('a kick tears the bodies: torn decays after the kick, and the lobes move apart', () => {
+  expect(tearAt([kick(1)], 1).amount).toBeCloseTo(1);
+  expect(tearAt([kick(1)], 1.5).amount).toBeLessThan(0.3);
+  expect(tearAt([], 1).amount).toBe(0);
+  const torn = draw(1, { drums: [kick(1)] });
+  const calm = draw(1, { drums: [] });
+  expect(torn.ops).not.toEqual(calm.ops);
+  expect(bodiesLook.readouts?.(makeCtx(1, { drums: [kick(1)] }))[1]).toEqual({
+    label: 'TORN',
+    value: '100 %',
+  });
+});
+
+test('the lower half of each gradient takes the chord tone colours', () => {
+  const p = draw(1, { chords: [Bm] });
+  const fills = new Set(opsOf(p, 'fill').map((o) => o.args[0]));
+  // B 的顏色（Bm 的第三個音）是某個身體漸層最底下那條
+  expect(fills.has(darkGlow.noteColors[11])).toBe(true);
+  expect(bodiesLook.readouts?.(makeCtx(1, { chords: [Bm] }))[2]).toEqual({
+    label: 'CHORD',
+    value: 'Bm',
+  });
+});
+
+test('paper theme never calls glow; no chords and no spectrum still draws six bodies', () => {
+  const p = draw(1, {}, { theme: paperInk });
   expect(p.ops.some((o) => o.op === 'glow')).toBe(false);
-  expect(ellipses(p)).toHaveLength(9);
-});
-
-test('no chords: no ellipses, dash as the name (review focus 1)', () => {
-  const p = new RecordingPainter();
-  bodiesLook.draw(p, ctx(1));
-  expect(ellipses(p)).toHaveLength(0);
-  expect(p.ops.some((o) => o.op === 'text' && o.args[0] === '–')).toBe(true);
-  expect(p.ops.some((o) => o.op === 'text' && o.args[0] === '05 BODIES')).toBe(true);
+  expect(opsOf(p, 'shape').length).toBeGreaterThanOrEqual(BODY_BANDS.length * PIECES);
 });

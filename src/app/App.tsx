@@ -30,13 +30,14 @@ import './App.css';
 const PREVIEW_WIDTH = 540;
 const PREVIEW_HEIGHT = Math.round((PREVIEW_WIDTH * 16) / 9);
 
-type LookGroupId = 'drums' | 'bass' | 'chords' | 'spectrum' | 'mix';
+type LookGroupId = 'drums' | 'bass' | 'chords' | 'notes' | 'spectrum' | 'mix';
 
 /** 依樂器分組。頻譜不是單一樂器，是整首混音的頻率能量。 */
 const LOOK_GROUPS: { id: LookGroupId; name: string; note: string }[] = [
   { id: 'drums', name: '鼓', note: '跟著鼓點' },
   { id: 'bass', name: 'Bass', note: '跟著低音音高' },
   { id: 'chords', name: '和弦', note: '跟著和弦與調' },
+  { id: 'notes', name: '音符', note: '跟著轉譜出的音符' },
   { id: 'spectrum', name: '整首頻譜', note: '跟著混音的頻率能量' },
   { id: 'mix', name: '綜合', note: '同時聽多種樂器' },
 ];
@@ -103,6 +104,7 @@ const STAGE_TEXT: Record<Stage, string> = {
   drums: '找鼓點',
   chords: '找和弦',
   bass: '找 bass',
+  notes: '轉譜（找音符）',
 };
 
 export function App() {

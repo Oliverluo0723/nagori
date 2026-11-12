@@ -15,6 +15,8 @@
     "score": "vitest run --config score/vitest.config.ts"
   },
   "dependencies": {
+    "@spotify/basic-pitch": "^1.0.1",
+    "@tensorflow/tfjs": "^4.22.0",
     "@tonejs/midi": "^2.0.28",
     "demucs-web": "^1.0.2",
     "essentia.js": "^0.1.3",

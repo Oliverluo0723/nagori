@@ -17,7 +17,8 @@ test('sheet looks read PRINTED / PEN / TIME', () => {
 
 test('drum looks count the hits so far, then bar and tempo; at most four columns', () => {
   const drums = [0.5, 1, 1.5, 9].map((time) => ({ time, kind: 'kick' as const, velocity: 1 }));
-  const r = readoutsFor(looks.rings, makeCtx(2.1, { drums }));
+  // 預設讀數：拿掉 grid 自訂的 readouts，只留它聽的 drums/tempo
+  const r = readoutsFor({ ...looks.grid, readouts: undefined }, makeCtx(2.1, { drums }));
   expect(r[0]).toEqual({ label: 'HITS', value: '3' });
   expect(r.find((c) => c.label === 'TEMPO')?.value).toBe('120 BPM');
   expect(r.find((c) => c.label === 'BAR')?.value).toBe('2.1');
@@ -26,7 +27,8 @@ test('drum looks count the hits so far, then bar and tempo; at most four columns
 
 test('bass looks name the note sounding now', () => {
   const bass = [{ time: 0, duration: 4, midi: 26, bends: [] }];
-  const r = readoutsFor(looks.glide, makeCtx(1, { bass }));
+  // 用不帶自訂讀數的 glide 測預設路徑（glide 自己的讀數是 NOTE / FREQUENCY …）
+  const r = readoutsFor({ ...looks.glide, readouts: undefined }, makeCtx(1, { bass }));
   expect(r[0]).toEqual({ label: 'BASS', value: 'D1' });
 });
 

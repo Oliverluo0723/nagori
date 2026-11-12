@@ -1,124 +1,158 @@
-import { positionAt, timeOfBar } from '../analysis/tempo';
 import type { DrumHit } from '../analysis/types';
-import type { Painter } from './painter/painter';
-import { drawLabel, formatTime, paramNum, printedBeat } from './sheet';
+import type { Painter, Point } from './painter/painter';
+import { drawLabel, formatTime, paramNum } from './sheet';
+import {
+  accentWindow,
+  drumEnvelope,
+  envAt,
+  geometryCache,
+  labelSize,
+  penCursor,
+  wiggle,
+} from './sheetPrint';
 import type { Look, LookContext, ParamDef } from './types';
 
 const params: ParamDef[] = [
-  { key: 'barsPerRow', label: '一列小節數', min: 2, max: 16, default: 8 },
+  { key: 'density', label: '列密度', min: 0.5, max: 2, default: 1 },
   { key: 'gain', label: '振幅', min: 0.3, max: 2, default: 1 },
 ];
 
-const LEFT = 0.1;
-const WIDTH = 0.84;
-const TOP = 0.12;
-const BOTTOM = 0.88;
-/** 每個鼓件的震盪：波長、衰減長度（都是列高的倍數）、振幅（列高的倍數）。 */
-const VOICE: Record<DrumHit['kind'], { wave: number; decay: number; amp: number }> = {
-  kick: { wave: 0.22, decay: 0.7, amp: 0.42 },
-  snare: { wave: 0.1, decay: 0.45, amp: 0.3 },
-  hat: { wave: 0.05, decay: 0.15, amp: 0.1 },
-};
-const REACH = 4; // 衰減長度的幾倍之後就不算
+/** 列距（短邊倍數）：Oto 方形海報 10 列。 */
+const ROW_PITCH = 0.085;
+/** 波形取樣間距（短邊倍數）：一上一下兩點是一個週期，密到像真的音訊波形。 */
+const STEP = 0.0028;
+/** 安靜時的底噪（列高倍數），讓沒鼓的地方是一條細細抖動的線。 */
+const FLOOR = 0.012;
 
-interface Pt {
-  x: number;
-  y: number;
+interface Layout {
+  left: number;
+  right: number;
+  top: number;
+  rows: number;
+  rowGap: number;
+  font: number;
+  step: number;
 }
+
+function layout(ctx: LookContext): Layout {
+  const unit = Math.min(ctx.w, ctx.h);
+  const font = labelSize(ctx);
+  const density = paramNum(ctx, params, 'density');
+  const rows = Math.max(2, Math.min(60, Math.round((ctx.h / (unit * ROW_PITCH)) * density)));
+  return {
+    left: font * 3.6,
+    right: ctx.w,
+    top: 0,
+    rows,
+    rowGap: ctx.h / rows,
+    font,
+    step: Math.max(1.5, unit * STEP),
+  };
+}
+
+/** 一列的波形點：時間 from..to 對應 left..right，振幅是鼓包絡。 */
+function rowPoints(
+  env: Float32Array,
+  L: Layout,
+  r: number,
+  from: number,
+  to: number,
+  limit: number,
+  gain: number,
+): Point[] {
+  const span = L.right - L.left;
+  const n = Math.max(2, Math.floor(span / L.step));
+  const base = L.top + (r + 0.5) * L.rowGap;
+  const amp = L.rowGap * 0.48;
+  const pts: Point[] = [];
+  for (let i = 0; i <= n; i++) {
+    const time = from + ((to - from) * i) / n;
+    if (time > limit) break;
+    const e = Math.min(1, Math.sqrt(envAt(env, time)) * gain);
+    const a = (FLOOR + (1 - FLOOR) * e) * amp;
+    pts.push({ x: L.left + (span * i) / n, y: base + wiggle(r * 100003 + i) * a });
+  }
+  return pts;
+}
+
+const rowCache = geometryCache<DrumHit[], Point[][]>();
 
 function draw(p: Painter, ctx: LookContext): void {
   const { w, h, t, theme } = ctx;
   const { tempo, drums, duration } = ctx.readings;
-  const barsPerRow = Math.max(1, Math.round(paramNum(ctx, params, 'barsPerRow')));
+  const total = duration > 0 ? duration : 1;
   const gain = paramNum(ctx, params, 'gain');
-  const endPos = positionAt(tempo, Math.max(0, duration));
-  const totalBars = Math.max(1, endPos.barPhase > 0 ? endPos.bar : endPos.bar - 1);
-  const rows = Math.max(1, Math.ceil(totalBars / barsPerRow));
-  const left = w * LEFT;
-  const span = w * WIDTH;
-  const rowGap = (h * (BOTTOM - TOP)) / rows;
-  const rowY = (r: number) => h * TOP + (r + 0.5) * rowGap;
-  const samples = Math.max(16, Math.round(span / 2));
-  const beat = printedBeat(tempo, t);
+  const L = layout(ctx);
+  const rowSec = total / L.rows;
+  const unit = Math.min(w, h);
+  const printedTo = Math.min(Math.max(0, t), total);
+  const current = Math.min(L.rows - 1, Math.floor(printedTo / rowSec));
+  const rowY = (r: number) => L.top + (r + 0.5) * L.rowGap;
+  const weight = Math.max(0.8, unit * 0.0014);
+  const env = drumEnvelope(drums, total);
 
   p.background(theme.paper);
 
-  // 每列基線
+  // 還沒印的列：淡基線
   p.noFill();
-  p.stroke(theme.line, h * 0.0008);
-  for (let r = 0; r < rows; r++) p.line(left, rowY(r), left + span, rowY(r));
+  p.stroke(theme.line, Math.max(0.6, unit * 0.0008));
+  for (let r = current + 1; r < L.rows; r++) p.line(L.left, rowY(r), L.right, rowY(r));
 
-  for (let r = 0; r < rows; r++) {
-    const firstBar = r * barsPerRow + 1;
-    const start = timeOfBar(tempo, firstBar);
-    const end = timeOfBar(tempo, firstBar + barsPerRow);
-    if (!(end > start) || start > t) break;
-    const xOf = (time: number) => left + ((time - start) / (end - start)) * span;
-    const pxPerSec = span / (end - start);
-    const reachSec = (REACH * VOICE.kick.decay * rowGap) / pxPerSec;
-    const rowHits = drums.filter((d) => d.time >= start - reachSec && d.time <= Math.min(end, t));
-
-    const ink: Pt[] = [];
-    const accent: Pt[] = [];
-    const printedTo = Math.min(t, end);
-    let first = 0;
-    for (let i = 0; i <= samples; i++) {
-      const time = start + ((end - start) * i) / samples;
-      if (time > printedTo) break;
-      const x = xOf(time);
-      let y = rowY(r);
-      // 只有 x 之前、且還在衰減範圍內的 hit 會出力；hits 已依時間排序
-      for (let k = first; k < rowHits.length; k++) {
-        const hit = rowHits[k];
-        const dx = x - xOf(hit.time);
-        if (dx < 0) break;
-        const v = VOICE[hit.kind];
-        const decay = v.decay * rowGap;
-        if (dx > REACH * decay) {
-          if (k === first) first++;
-          continue;
-        }
-        const env = Math.exp(-dx / decay) * (1 - Math.exp(-dx / (decay * 0.05)));
-        y -=
-          v.amp *
-          rowGap *
-          gain *
-          hit.velocity *
-          env *
-          Math.sin((2 * Math.PI * dx) / (v.wave * rowGap));
-      }
-      const pt = { x, y };
-      if (time < t - beat) ink.push(pt);
-      else {
-        if (accent.length === 0 && ink.length > 0) accent.push(ink[ink.length - 1]);
-        accent.push(pt);
-      }
-    }
-    p.noFill();
-    if (ink.length > 1) {
-      p.stroke(theme.ink, h * 0.0009);
-      p.polyline(ink);
-    }
-    if (accent.length > 1) {
-      if (theme.glow) p.glow(theme.accent, h * 0.005);
-      p.stroke(theme.accent, h * 0.0009);
-      p.polyline(accent);
-      if (theme.glow) p.noGlow();
-    }
-
-    p.noStroke();
-    p.fill(theme.mute);
-    p.text(formatTime(start), left - w * 0.02, rowY(r), {
-      size: h * 0.01,
+  // 列的時間標籤
+  p.noStroke();
+  p.fill(theme.mute);
+  for (let r = 0; r < L.rows; r++) {
+    p.text(formatTime(r * rowSec), 0, rowY(r) - L.font * 0.6, {
+      size: L.font,
       font: 'mono',
-      align: 'right',
+      align: 'left',
     });
+  }
+
+  // 印完的列：整列快取
+  const done = rowCache(drums, `${w}x${h}:${L.rows}:${gain}:${total}`, () => {
+    const out: Point[][] = [];
+    for (let r = 0; r < L.rows; r++)
+      out.push(rowPoints(env, L, r, r * rowSec, (r + 1) * rowSec, Number.POSITIVE_INFINITY, gain));
+    return out;
+  });
+  p.noFill();
+  p.stroke(theme.ink, weight);
+  for (let r = 0; r < current; r++) p.polyline(done[r]);
+
+  // 正在印的列：最近兩拍用強調色，筆頭在最前端，一條直的寫入線
+  const full = done[current];
+  const start = current * rowSec;
+  const xOf = (time: number) => L.left + ((time - start) / rowSec) * (L.right - L.left);
+  const headX = xOf(printedTo);
+  const accentX = xOf(Math.max(start, printedTo - accentWindow(tempo, t)));
+  const ink: Point[] = [];
+  const accent: Point[] = [];
+  for (const pt of full) {
+    if (pt.x > headX) break;
+    if (pt.x < accentX) ink.push(pt);
+    else {
+      if (accent.length === 0 && ink.length > 0) accent.push(ink[ink.length - 1]);
+      accent.push(pt);
+    }
+  }
+  if (ink.length > 1) p.polyline(ink);
+  if (accent.length > 1) {
+    if (theme.glow) p.glow(theme.accent, unit * 0.005);
+    p.stroke(theme.accent, weight * 1.1);
+    p.polyline(accent);
+    if (theme.glow) p.noGlow();
+  }
+  if (t < total) {
+    p.stroke(theme.mute, Math.max(0.6, unit * 0.0008), 0.6);
+    p.line(headX, 0, headX, h);
+    penCursor(p, ctx, headX, rowY(current));
   }
 
   drawLabel(p, ctx);
 }
 
-/** 地震鼓紋：一列 N 小節，每個 hit 是一段衰減震盪，kick 粗、snare 中、hat 細。 */
+/** 地震鼓紋：整首歌切成十幾列，每列是一段鼓的密集波形（kick 大、snare 中、hat 小），由上往下印。 */
 export const drumLook: Look = {
   id: 'drum',
   number: 8,

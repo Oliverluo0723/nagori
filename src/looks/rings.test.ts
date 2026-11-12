@@ -1,92 +1,82 @@
-import { Midi } from '@tonejs/midi';
 import { expect, test } from 'vitest';
-import { makeMidi } from '../../test/fixtures/midi';
-import { buildTempoMap } from '../analysis/tempo';
-import type { DrumHit, Readings } from '../analysis/types';
-import { darkGlow, paperInk } from '../compose/themes';
+import { hasText, makeCtx, opsOf } from '../../test/fixtures/looks';
+import type { DrumHit } from '../analysis/types';
+import { paperInk } from '../compose/themes';
 import { RecordingPainter } from './painter/recording';
 import { looks } from './registry';
-import { ringsLook } from './rings';
-import type { LookContext } from './types';
+import { ringRadius, ringsLayout, ringsLook } from './rings';
 
-const tempo = buildTempoMap(new Midi(makeMidi({ bpm: 120, tracks: [] })).header);
-const readings = (hits: DrumHit[]): Readings => ({ duration: 60, tempo, drums: hits, roles: [] });
-const ctx = (t: number, hits: DrumHit[], theme = darkGlow): LookContext => ({
-  t,
-  w: 1080,
-  h: 1920,
-  readings: readings(hits),
-  theme,
-  params: {},
-  seed: 1,
-  label: '06 RINGS',
-});
-
-test('deterministic: same context gives identical ops', () => {
-  const a = new RecordingPainter();
-  const b = new RecordingPainter();
-  ringsLook.draw(a, ctx(1.2, [{ time: 1, kind: 'kick', velocity: 1 }]));
-  ringsLook.draw(b, ctx(1.2, [{ time: 1, kind: 'kick', velocity: 1 }]));
-  expect(a.ops).toEqual(b.ops);
-});
-
-test('a kick at now is a filled accent circle at the now line', () => {
+// makeCtx：120 BPM（一小節 2 秒）、60 秒 = 30 小節
+const kick = (time: number, velocity = 1): DrumHit => ({ time, kind: 'kick', velocity });
+const draw = (t: number, drums: DrumHit[], extra = {}) => {
   const p = new RecordingPainter();
-  ringsLook.draw(p, ctx(1, [{ time: 1, kind: 'kick', velocity: 1 }]));
-  const fills = p.ops.filter((o) => o.op === 'fill');
-  expect(fills.some((o) => o.args[0] === '#ff4a1c')).toBe(true);
-  const circle = p.ops.find((o) => o.op === 'circle');
-  expect(circle?.args[0]).toBeCloseTo(1080 * 0.62);
-});
+  ringsLook.draw(p, makeCtx(t, { drums }, extra));
+  return p;
+};
+/** 落在鼓點上的圈（排除每小節的圓心珠子與現在那一下的核心）用 stroke + circle 數。 */
+const ringCount = (p: RecordingPainter) => opsOf(p, 'circle').length;
 
-test('snare is stroked not filled; hat is a line', () => {
-  const p = new RecordingPainter();
-  ringsLook.draw(
-    p,
-    ctx(1.1, [
-      { time: 1, kind: 'snare', velocity: 1 },
-      { time: 1.05, kind: 'hat', velocity: 1 },
-    ]),
-  );
-  expect(p.ops.filter((o) => o.op === 'circle')).toHaveLength(1);
-  expect(p.ops.filter((o) => o.op === 'line').length).toBeGreaterThanOrEqual(2); // 軸 + hat
-});
-
-test('hits older than fadeSeconds and future hits are not drawn', () => {
-  const p = new RecordingPainter();
-  ringsLook.draw(
-    p,
-    ctx(10, [
-      { time: 1, kind: 'kick', velocity: 1 },
-      { time: 20, kind: 'kick', velocity: 1 },
-    ]),
-  );
-  expect(p.ops.filter((o) => o.op === 'circle')).toHaveLength(0);
-});
-
-test('paper theme never calls glow; empty drums still draws axis and label', () => {
-  const p = new RecordingPainter();
-  ringsLook.draw(p, ctx(3, [], paperInk));
-  expect(p.ops.some((o) => o.op === 'glow')).toBe(false);
-  expect(p.ops.some((o) => o.op === 'text' && o.args[0] === '06 RINGS')).toBe(true);
-  expect(p.ops.some((o) => o.op === 'line')).toBe(true);
-});
-
-test('registry exposes rings by id', () => {
+test('registry exposes rings by id, number 6', () => {
   expect(looks.rings).toBe(ringsLook);
   expect(ringsLook).toMatchObject({ id: 'rings', number: 6 });
 });
 
-test('t past every hit: axis and now line remain, no circles (review focus 5)', () => {
-  const p = new RecordingPainter();
-  ringsLook.draw(
-    p,
-    ctx(100, [
-      { time: 1, kind: 'kick', velocity: 1 },
-      { time: 2, kind: 'snare', velocity: 1 },
-    ]),
-  );
-  expect(p.ops.filter((o) => o.op === 'circle')).toHaveLength(0);
-  expect(p.ops.filter((o) => o.op === 'line')).toHaveLength(2);
-  expect(p.ops[0]).toEqual({ op: 'background', args: ['#0f0f0f'] });
+test('deterministic: same context gives identical ops', () => {
+  const hits = [kick(1), { time: 1.5, kind: 'snare', velocity: 0.7 } as DrumHit, kick(3)];
+  expect(draw(3.2, hits).ops).toEqual(draw(3.2, hits).ops);
+});
+
+test('prints the whole song: every hit up to t stays, future hits are not drawn', () => {
+  const hits = [kick(1), kick(5), kick(20), kick(50)];
+  const early = ringCount(draw(6, hits));
+  const late = ringCount(draw(55, hits));
+  // 晚的那幀多了兩個圈（20 s、50 s），各自也多一顆小節圓心
+  expect(late).toBeGreaterThan(early);
+  const none = draw(0.5, hits);
+  expect(ringCount(none)).toBe(0);
+});
+
+test('a tall box folds the song into several rows that fill the width', () => {
+  const L = ringsLayout(984, 1600, 115);
+  expect(L.rows).toBeGreaterThanOrEqual(5);
+  expect(L.rows).toBeLessThanOrEqual(7);
+  expect(L.barsPerRow * L.rows).toBeGreaterThanOrEqual(115);
+  expect(L.x0).toBeLessThan(984 * 0.15);
+  expect(L.x1).toBeGreaterThan(984 * 0.85);
+  // 寬框行數少
+  expect(ringsLayout(1600, 400, 115).rows).toBeLessThan(L.rows);
+  // 手動行數
+  expect(ringsLayout(984, 1600, 115, 3).rows).toBe(3);
+});
+
+test('kick rings are bigger than snare, snare bigger than hat; velocity grows them', () => {
+  expect(ringRadius('kick', 1)).toBeGreaterThan(ringRadius('snare', 1));
+  expect(ringRadius('snare', 1)).toBeGreaterThan(ringRadius('hat', 1));
+  expect(ringRadius('kick', 1)).toBeGreaterThan(ringRadius('kick', 0.2));
+});
+
+test('the hit just dropped gets an accent pulse ring that fades', () => {
+  const fresh = draw(1.05, [kick(1)]);
+  expect(opsOf(fresh, 'stroke').some((o) => o.args[0] === '#ff4a1c')).toBe(true);
+  const old = draw(3, [kick(1)]);
+  expect(opsOf(old, 'stroke').some((o) => o.args[0] === '#ff4a1c')).toBe(false);
+});
+
+test('paper theme never calls glow and multiplies ink; empty drums still draw axes and times', () => {
+  const p = draw(3, [kick(1)], { theme: paperInk });
+  expect(p.ops.some((o) => o.op === 'glow')).toBe(false);
+  expect(opsOf(p, 'blend').some((o) => o.args[0] === 'multiply')).toBe(true);
+  const empty = draw(3, []);
+  expect(opsOf(empty, 'line').length).toBeGreaterThan(0);
+  expect(hasText(empty, '0:00')).toBe(true);
+  expect(ringCount(empty)).toBe(0);
+});
+
+test('readouts are PRINTED / PEN / TIME like the Oto sheet', () => {
+  const r = ringsLook.readouts?.(makeCtx(30, { duration: 60 }));
+  expect(r).toEqual([
+    { label: 'PRINTED', value: '50 %' },
+    { label: 'PEN', value: 'Rings' },
+    { label: 'TIME', value: '0:30' },
+  ]);
 });

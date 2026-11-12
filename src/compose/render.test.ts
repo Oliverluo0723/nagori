@@ -57,15 +57,21 @@ test('layoutCells splits a column by ratio', () => {
   ]);
 });
 
-test('missing params fall back to ParamDef defaults (windowBars=2)', () => {
-  // 120 bpm 一小節 2 秒，視窗 2 小節 = 4 秒，pxPerSec = w/4
-  // kick 在 1 秒，t = 1.5：x = 0.62·w − 0.5·w/4 = 0.495·w（w 是繪圖框寬）
-  const surfaces = new RecordingSurfaceProvider();
+test('missing params fall back to ParamDef defaults (rings: rows=0 auto, size=1)', () => {
   const r: Readings = { ...readings, drums: [{ time: 1, kind: 'kick', velocity: 1 }] };
-  renderFrame({ composition: single, t: 1.5, readings: r, surfaces, target: { w: 540, h: 960 } });
-  const { plot } = frameLayout(540, 960, false);
-  const circle = surfaces.surfaces.get('c1')?.painter.ops.find((o) => o.op === 'circle');
-  expect(circle?.args[0]).toBeCloseTo(0.495 * plot.w, 1);
+  const opsWith = (params: Record<string, number>) => {
+    const surfaces = new RecordingSurfaceProvider();
+    const composition: Composition = {
+      ...single,
+      root: { kind: 'cell', id: 'c1', lookId: 'rings', params },
+    };
+    renderFrame({ composition, t: 1.5, readings: r, surfaces, target: { w: 540, h: 960 } });
+    return surfaces.surfaces.get('c1')?.painter.ops;
+  };
+  const defaults = opsWith({});
+  expect(defaults?.some((o) => o.op === 'circle')).toBe(true);
+  expect(defaults).toEqual(opsWith({ rows: 0, size: 1 }));
+  expect(defaults).not.toEqual(opsWith({ rows: 0, size: 1.5 }));
 });
 
 function frameTexts(surfaces: RecordingSurfaceProvider): string[] {
@@ -101,8 +107,9 @@ test('frame draws a readout row with labels and values', () => {
   const surfaces = new RecordingSurfaceProvider();
   renderFrame({ composition: single, t: 3, readings, surfaces, target: { w: 540, h: 960 } });
   const texts = frameTexts(surfaces);
-  expect(texts).toContain('TEMPO');
-  expect(texts).toContain('120 BPM');
+  // rings 是 Sheet 系：PRINTED / PEN / TIME
+  expect(texts).toContain('PRINTED');
+  expect(texts).toContain('Rings');
 });
 
 test('canvas style: cells sit inside the safe area and the footer shows the time', () => {

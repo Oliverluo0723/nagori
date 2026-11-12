@@ -1,89 +1,73 @@
 import { expect, test } from 'vitest';
+import { flatSpectrum, hasText, makeCtx, opsOf, spectrumWith } from '../../test/fixtures/looks';
 import { binHz } from '../analysis/audio/spectrum';
-import { tempoMapFromBpm } from '../analysis/tempo';
-import type { Readings, Spectrum } from '../analysis/types';
-import { darkGlow, paperInk } from '../compose/themes';
-import { meshLook } from './mesh';
+import { darkGlow } from '../compose/themes';
+import { BANDS, meshLook } from './mesh';
 import { RecordingPainter } from './painter/recording';
 import { looks } from './registry';
-import type { LookContext } from './types';
 
-const tempo = tempoMapFromBpm(120); // 一拍 0.5 秒
-const BINS = 64;
-
-function spectrumWith(seconds: number, fill: (bin: number) => number, fps = 10): Spectrum {
-  const frameCount = seconds * fps;
-  const frames = new Float32Array(frameCount * BINS);
-  for (let f = 0; f < frameCount; f++)
-    for (let b = 0; b < BINS; b++) frames[f * BINS + b] = fill(b);
-  return { fps, bins: BINS, minHz: 30, maxHz: 16000, frames, frameCount };
-}
-const ctx = (t: number, s?: Spectrum, theme = darkGlow): LookContext => ({
-  t,
-  w: 1080,
-  h: 1920,
-  readings: { duration: 20, tempo, drums: [], roles: [], spectrum: s } as Readings,
-  theme,
-  params: {},
-  seed: 1,
-  label: '10 MESH',
-});
 type Pt = { x: number; y: number };
-const polylines = (p: RecordingPainter) => p.ops.filter((o) => o.op === 'polyline');
+const W = 1080;
+const H = 1920;
+
+/** 只有 lo..hi 這段頻率有聲音的頻譜。 */
+const bandOnly = ([lo, hi]: [number, number]) => {
+  const base = spectrumWith(60, () => 0, { bins: 32 });
+  return spectrumWith(60, (b) => (binHz(base, b) >= lo && binHz(base, b) < hi ? 1 : 0.05), {
+    bins: 32,
+  });
+};
 
 test('deterministic', () => {
-  const s = spectrumWith(20, () => 0.5);
   const a = new RecordingPainter();
   const b = new RecordingPainter();
-  meshLook.draw(a, ctx(4, s));
-  meshLook.draw(b, ctx(4, s));
+  meshLook.draw(a, makeCtx(20, { spectrum: flatSpectrum(60, 0.5) }));
+  meshLook.draw(b, makeCtx(20, { spectrum: flatSpectrum(60, 0.5) }));
   expect(a.ops).toEqual(b.ops);
 });
 
-test('without spectrum: six lane baselines and label, no polylines', () => {
+test('without spectrum: label only, no ribbons', () => {
   const p = new RecordingPainter();
-  meshLook.draw(p, ctx(4, undefined, paperInk));
-  expect(p.ops.filter((o) => o.op === 'line')).toHaveLength(6);
-  expect(polylines(p)).toHaveLength(0);
-  expect(p.ops.some((o) => o.op === 'text' && o.args[0] === '10 MESH')).toBe(true);
-  expect(p.ops.some((o) => o.op === 'glow')).toBe(false);
+  meshLook.draw(p, makeCtx(10, {}, { label: '10 MESH' }));
+  expect(hasText(p, '10 MESH')).toBe(true);
+  expect(opsOf(p, 'polyline')).toHaveLength(0);
 });
 
-test('only the lane whose band has energy opens up; others stay flat', () => {
-  const s = spectrumWith(20, (b) => {
-    const hz = binHz(
-      { fps: 10, bins: BINS, minHz: 30, maxHz: 16000, frames: new Float32Array(), frameCount: 0 },
-      b,
-    );
-    return hz >= 200 && hz <= 500 ? 1 : 0;
-  });
+test('ribbons span the whole width when fully printed and fill the height', () => {
   const p = new RecordingPainter();
-  meshLook.draw(p, ctx(4, s));
-  // 六條泳道各有上下兩條包絡線 = 12 條
-  const env = polylines(p);
-  expect(env).toHaveLength(12);
-  let open = 0;
-  for (let lane = 0; lane < 6; lane++) {
-    const top = env[lane * 2].args[0] as Pt[];
-    const bottom = env[lane * 2 + 1].args[0] as Pt[];
-    const gap = Math.max(...top.map((q, i) => bottom[i].y - q.y));
-    if (gap > 1) open++;
-  }
-  expect(open).toBe(1);
+  meshLook.draw(p, makeCtx(60, { spectrum: bandOnly(BANDS[3]) }));
+  const pts = opsOf(p, 'polyline').flatMap((o) => o.args[0] as Pt[]);
+  expect(Math.min(...pts.map((pt) => pt.x))).toBeCloseTo(0);
+  expect(Math.max(...pts.map((pt) => pt.x))).toBeCloseTo(W);
+  expect(Math.max(...pts.map((pt) => pt.y))).toBeGreaterThan(H * 0.85);
+  expect(Math.min(...pts.map((pt) => pt.y))).toBeLessThan(H * 0.15);
 });
 
-test('samples stop at t: one point per beat printed so far', () => {
-  const s = spectrumWith(20, () => 0.5);
+test('the band with energy opens into a thick ribbon; quiet bands stay thin', () => {
   const p = new RecordingPainter();
-  meshLook.draw(p, ctx(4, s));
-  const top = polylines(p)[0].args[0] as Pt[];
-  // 0.5 秒一拍，t = 4 → 拍 0 … 3.5 共 8 個樣本
-  expect(top).toHaveLength(8);
-  const colors = p.ops.filter((o) => o.op === 'stroke').map((o) => o.args[0]);
-  expect(colors).toContain(darkGlow.accent);
+  meshLook.draw(p, makeCtx(60, { spectrum: bandOnly(BANDS[3]) }));
+  const pts = opsOf(p, 'polyline').flatMap((o) => o.args[0] as Pt[]);
+  const pitch = H / BANDS.length;
+  const height = (lane: number) => {
+    const ys = pts
+      .filter((pt) => pt.x > W * 0.3 && pt.x < W * 0.7)
+      .map((pt) => pt.y)
+      .filter((y) => y > lane * pitch + pitch * 0.05 && y < (lane + 1) * pitch - pitch * 0.05);
+    return ys.length ? Math.max(...ys) - Math.min(...ys) : 0;
+  };
+  expect(height(3)).toBeGreaterThan(height(0) * 3);
+});
+
+test('weaving stops at t, with the newest stretch in accent and a pen', () => {
+  const p = new RecordingPainter();
+  meshLook.draw(p, makeCtx(15, { spectrum: flatSpectrum(60, 0.5) }));
+  const pts = opsOf(p, 'polyline').flatMap((o) => o.args[0] as Pt[]);
+  expect(Math.max(...pts.map((pt) => pt.x))).toBeLessThan(W * 0.3);
+  expect(opsOf(p, 'stroke').map((o) => o.args[0])).toContain(darkGlow.accent);
+  expect(opsOf(p, 'circle')).toHaveLength(2);
 });
 
 test('registry exposes mesh as number 10', () => {
   expect(looks.mesh).toBe(meshLook);
-  expect(meshLook).toMatchObject({ id: 'mesh', number: 10, listens: ['spectrum', 'tempo'] });
+  expect(meshLook).toMatchObject({ id: 'mesh', number: 10 });
 });

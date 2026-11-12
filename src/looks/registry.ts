@@ -1,3 +1,4 @@
+import { arcadeLook } from './arcade';
 import { blotLook } from './blot';
 import { bodiesLook } from './bodies';
 import { cometLook } from './comet';
@@ -11,16 +12,21 @@ import { gelLook } from './gel';
 import { glideLook } from './glide';
 import { glyphLook } from './glyph';
 import { gridLook } from './grid';
+import { grooveLook } from './groove';
 import { kaleidoLook } from './kaleido';
 import { lidarLook } from './lidar';
 import { meshLook } from './mesh';
+import { paintLook } from './paint';
+import { pegboardLook } from './pegboard';
 import { polygraphLook } from './polygraph';
 import { ridgeLook } from './ridge';
 import { ringsLook } from './rings';
+import { rollLook } from './roll';
 import { spectrumLook } from './spectrum';
 import { starsLook } from './stars';
 import { strataLook } from './strata';
 import { stringLook } from './string';
+import { trajectoryLook } from './trajectory';
 import type { Look } from './types';
 import { wheelLook } from './wheel';
 
@@ -49,4 +55,10 @@ export const looks: Record<string, Look> = {
   [cometLook.id]: cometLook,
   [starsLook.id]: starsLook,
   [flowLook.id]: flowLook,
+  [rollLook.id]: rollLook,
+  [arcadeLook.id]: arcadeLook,
+  [grooveLook.id]: grooveLook,
+  [pegboardLook.id]: pegboardLook,
+  [trajectoryLook.id]: trajectoryLook,
+  [paintLook.id]: paintLook,
 };
