@@ -33,3 +33,10 @@ test('RecordingPainter records wedge, polyline and ellipse with raw args', () =>
     { op: 'ellipse', args: [3, 4, 5, 6] },
   ]);
 });
+
+test('rgba converts theme hex colours for gradient stops', async () => {
+  const { rgba } = await import('./p5');
+  expect(rgba('#ff4a1c', 0.5)).toBe('rgba(255,74,28,0.5)');
+  expect(rgba('#fff', 0)).toBe('rgba(255,255,255,0)');
+  expect(rgba('red', 1)).toBeNull();
+});

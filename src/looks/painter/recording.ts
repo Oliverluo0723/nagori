@@ -13,6 +13,9 @@ export class RecordingPainter implements Painter {
   background(color: string): void {
     this.record('background', color);
   }
+  clear(): void {
+    this.record('clear');
+  }
   fill(color: string, alpha?: number): void {
     this.record('fill', color, alpha);
   }
@@ -58,5 +61,14 @@ export class RecordingPainter implements Painter {
   }
   ellipse(cx: number, cy: number, w: number, h: number): void {
     this.record('ellipse', cx, cy, w, h);
+  }
+  shape(points: Point[]): void {
+    this.record('shape', points);
+  }
+  haze(x: number, y: number, r: number, color: string, alpha: number): void {
+    this.record('haze', x, y, r, color, alpha);
+  }
+  blend(mode: 'normal' | 'add' | 'multiply'): void {
+    this.record('blend', mode);
   }
 }

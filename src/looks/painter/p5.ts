@@ -6,6 +6,18 @@ const FONTS = {
   mono: 'JetBrains Mono, ui-monospace, Menlo, monospace',
 } as const;
 
+/** '#rgb' / '#rrggbb' → 'rgba(r,g,b,a)'；不是 hex 就原樣回傳（alpha 交給 globalAlpha）。 */
+export function rgba(color: string, alpha: number): string | null {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());
+  if (!m) return null;
+  let hex = m[1];
+  if (hex.length === 3) hex = hex.replace(/./g, (c) => c + c);
+  const n = Number.parseInt(hex, 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+}
+
+const BLEND = { normal: 'source-over', add: 'lighter', multiply: 'multiply' } as const;
+
 /** 把 Painter 的呼叫對應到一個 p5.Graphics。p5 只在這個檔案出現。 */
 export class P5Painter implements Painter {
   constructor(
@@ -32,7 +44,13 @@ export class P5Painter implements Painter {
   }
 
   background(color: string): void {
+    // 每幀從 background/clear 開始：順便把上一幀留下的疊加模式歸位
+    this.ctx2d.globalCompositeOperation = 'source-over';
     this.g.background(color);
+  }
+  clear(): void {
+    this.ctx2d.globalCompositeOperation = 'source-over';
+    this.g.clear();
   }
   fill(color: string, alpha?: number): void {
     this.g.fill(this.withAlpha(color, alpha));
@@ -106,5 +124,35 @@ export class P5Painter implements Painter {
   }
   ellipse(cx: number, cy: number, w: number, h: number): void {
     this.g.ellipse(cx, cy, w, h);
+  }
+  shape(points: Point[]): void {
+    const g = this.g;
+    g.beginShape();
+    for (const p of points) g.vertex(p.x, p.y);
+    g.endShape('close');
+  }
+  haze(x: number, y: number, r: number, color: string, alpha: number): void {
+    if (!(r > 0) || alpha <= 0) return;
+    const c = this.ctx2d;
+    const inner = rgba(color, alpha);
+    const outer = rgba(color, 0);
+    c.save();
+    c.shadowBlur = 0;
+    if (inner && outer) {
+      const grad = c.createRadialGradient(x, y, 0, x, y, r);
+      grad.addColorStop(0, inner);
+      grad.addColorStop(1, outer);
+      c.fillStyle = grad;
+    } else {
+      c.globalAlpha *= alpha;
+      c.fillStyle = color;
+    }
+    c.beginPath();
+    c.arc(x, y, r, 0, Math.PI * 2);
+    c.fill();
+    c.restore();
+  }
+  blend(mode: 'normal' | 'add' | 'multiply'): void {
+    this.ctx2d.globalCompositeOperation = BLEND[mode];
   }
 }

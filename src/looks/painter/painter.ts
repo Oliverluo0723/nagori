@@ -13,6 +13,8 @@ export interface TextStyle {
  */
 export interface Painter {
   background(color: string): void;
+  /** 清成全透明（疊在影片上的 look 用來去背）。 */
+  clear(): void;
   fill(color: string, alpha?: number): void;
   noFill(): void;
   stroke(color: string, weight: number, alpha?: number): void;
@@ -40,6 +42,15 @@ export interface Painter {
   /** 只 stroke 的折線。 */
   polyline(points: { x: number; y: number }[]): void;
   ellipse(cx: number, cy: number, w: number, h: number): void;
+  /** 用目前的 fill/stroke 畫一個封閉多邊形（點夠密就是平滑的有機形狀）。 */
+  shape(points: { x: number; y: number }[]): void;
+  /**
+   * 徑向色暈：中心 color@alpha，到半徑 r 淡成全透明。不用 shadowBlur，很便宜，
+   * 拿來鋪背景色光（Oto 的 Blot 粉霧、Dew 彩霧、Fountain 光柱）。不受目前 fill/stroke 影響。
+   */
+  haze(x: number, y: number, r: number, color: string, alpha: number): void;
+  /** 之後的圖形怎麼跟底下疊：normal 一般、add 光相加（發光）、multiply 墨色相乘（紙感）。 */
+  blend(mode: 'normal' | 'add' | 'multiply'): void;
 }
 
 export interface Point {
