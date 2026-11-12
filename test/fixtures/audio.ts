@@ -80,7 +80,16 @@ export function synthBeat(opts: SynthOptions = {}): Float32Array {
           (t) => (rnd() * 0.8 + Math.sin(2 * Math.PI * 180 * t) * 0.3) * Math.exp(-t * 20) * 0.7,
         );
       } else {
-        add(h.time, 0.05, (t) => rnd() * Math.exp(-t * 80) * 0.35 * (h.velocity / 0.6));
+        // hat：高通過的雜訊（二階差分），真的 hat 在 3 kHz 以下幾乎沒有能量
+        let n1 = 0;
+        let n2 = 0;
+        add(h.time, 0.05, (t) => {
+          const n0 = rnd();
+          const hp = n0 - 2 * n1 + n2;
+          n2 = n1;
+          n1 = n0;
+          return hp * 0.5 * Math.exp(-t * 80) * 0.35 * (h.velocity / 0.6);
+        });
       }
     }
   }
