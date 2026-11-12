@@ -17,6 +17,7 @@ import { meshLook } from './mesh';
 import { polygraphLook } from './polygraph';
 import { ridgeLook } from './ridge';
 import { ringsLook } from './rings';
+import { rollLook } from './roll';
 import { spectrumLook } from './spectrum';
 import { starsLook } from './stars';
 import { strataLook } from './strata';
@@ -49,4 +50,5 @@ export const looks: Record<string, Look> = {
   [cometLook.id]: cometLook,
   [starsLook.id]: starsLook,
   [flowLook.id]: flowLook,
+  [rollLook.id]: rollLook,
 };
