@@ -28,6 +28,22 @@ const DRUM_KIND = { 36: 'kick', 35: 'kick', 38: 'snare', 40: 'snare', 42: 'hat',
 const midi = new Midi(readFileSync(midiPath));
 const out = { name: basename(audioPath).replace(/\.[^.]+$/, ''), audio: audioPath };
 if (stemsDir) out.stems = stemsDir;
+// 節拍：每一拍（ppq ticks）換算成秒，直到最後一個音結束；固定速度的歌另給 bpm
+const lastEnd = Math.max(0, ...midi.tracks.flatMap((t) => t.notes.map((n) => n.time + n.duration)));
+out.beats = [];
+for (let tick = 0; ; tick += midi.header.ppq) {
+  const t = midi.header.ticksToSeconds(tick);
+  if (t > lastEnd) break;
+  out.beats.push(Math.round(t * 1000) / 1000);
+}
+if (midi.header.tempos.length === 1) out.bpm = midi.header.tempos[0].bpm;
+const beatsPerBar = midi.header.timeSignatures[0]?.timeSignature[0] ?? 4;
+out.downbeats = out.beats.filter((_, i) => i % beatsPerBar === 0);
+// 鋼琴捲：所有非鼓軌的音
+out.notes = midi.tracks
+  .filter((t) => roleOf(t) !== 'drums')
+  .flatMap((t) => t.notes.map((n) => ({ time: n.time, duration: n.duration, midi: n.midi })))
+  .sort((a, b) => a.time - b.time || a.midi - b.midi);
 for (const track of midi.tracks) {
   const role = roleOf(track);
   if (role === 'bass') {
@@ -46,10 +62,13 @@ for (const track of midi.tracks) {
     out.chords = [...groups.values()]
       .map((notes) => {
         const lowest = notes.reduce((a, b) => (b.midi < a.midi ? b : a));
+        const root = lowest.midi % 12;
+        const pcs = new Set(notes.map((n) => n.midi % 12));
         return {
           time: lowest.time,
           duration: Math.max(...notes.map((n) => n.duration)),
-          root: lowest.midi % 12,
+          root,
+          minor: pcs.has((root + 3) % 12) && !pcs.has((root + 4) % 12),
         };
       })
       .sort((a, b) => a.time - b.time);

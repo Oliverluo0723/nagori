@@ -33,6 +33,39 @@ export function tempoMapFromBpm(bpm: number, offset = 0, ppq = 480): TempoMap {
   return { ppq, tempos: [{ ticks: 0, bpm }], timeSignatures: [], offset };
 }
 
+export interface BeatsMapOptions {
+  ppq?: number;
+  /** 第 1 小節第 1 拍是 beats 的第幾個（之前的拍丟掉） */
+  downbeat?: number;
+  /** 每拍的 bpm 取前後各幾拍的平均（0 = 逐拍，讀數會跟著 tick 抖動閃） */
+  window?: number;
+}
+
+/**
+ * 從偵測到的拍點（秒）建 tempo map：每拍一個 tempo 事件，速度漂移的歌小節格也跟著走；
+ * 最後一拍之後沿用最後的速度。offset = 第一個強拍的秒數。拍數不到 2 就退回固定 120。
+ */
+export function tempoMapFromBeats(beats: readonly number[], opts: BeatsMapOptions = {}): TempoMap {
+  const ppq = opts.ppq ?? 480;
+  const window = opts.window ?? 4;
+  const start = Math.max(0, Math.min(opts.downbeat ?? 0, beats.length - 1));
+  const b = beats.slice(start);
+  if (b.length < 2) return tempoMapFromBpm(120, b[0] ?? 0, ppq);
+  const gaps: number[] = [];
+  for (let i = 0; i + 1 < b.length; i++) gaps.push(b[i + 1] - b[i]);
+  const tempos: TempoMap['tempos'] = [];
+  for (let i = 0; i < gaps.length; i++) {
+    const lo = Math.max(0, i - window);
+    const hi = Math.min(gaps.length - 1, i + window);
+    let sum = 0;
+    for (let k = lo; k <= hi; k++) sum += gaps[k];
+    const bpm = Math.round((60 / (sum / (hi - lo + 1))) * 100) / 100;
+    const last = tempos[tempos.length - 1];
+    if (!last || Math.abs(last.bpm - bpm) >= 0.05) tempos.push({ ticks: i * ppq, bpm });
+  }
+  return { ppq, tempos, timeSignatures: [], offset: b[0] };
+}
+
 /** 秒 → ticks，依 tempos 分段積分。offset 之前的時間算成負 ticks。 */
 export function secondsToTicks(map: TempoMap, seconds: number): number {
   const tempos = temposFromZero(map);

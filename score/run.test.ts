@@ -8,7 +8,11 @@ import { expectedHits, synthBeat } from '../test/fixtures/audio';
 import { analyzeAudio } from '../src/analysis/analyzeAudio';
 import type { Stems } from '../src/analysis/stems/types';
 import type { Readings } from '../src/analysis/types';
+import { runAnalysis } from '../src/analysis/workerClient';
 import {
+  beatScore,
+  gridScore,
+  chordQualityAccuracy,
   chordRootAccuracy,
   drumF1,
   noteF1,
@@ -16,6 +20,7 @@ import {
   type SongTruth,
   type TruthNote,
 } from './metrics';
+import { transcribeNode } from './transcribeNode';
 
 const ROOT = join(import.meta.dirname, '..');
 const TRUTH_DIR = join(ROOT, 'samples', 'score');
@@ -29,6 +34,17 @@ interface Row {
   bassF1?: number;
   octaveErrors?: number;
   chordRoot?: number;
+  chordQuality?: number;
+  beatF1?: number;
+  bpmRatio?: number;
+  beatError?: number;
+  onGrid?: number;
+  gridError?: number;
+  downbeat?: number;
+  noteF1?: number;
+  notePrecision?: number;
+  noteRecall?: number;
+  noteCount?: string;
   kick?: number;
   snare?: number;
   hat?: number;
@@ -45,7 +61,27 @@ function score(name: string, r: Readings, truth: SongTruth, stems: boolean): Row
     row.bassF1 = f.f1;
     row.octaveErrors = f.octaveErrors;
   }
-  if (truth.chords) row.chordRoot = chordRootAccuracy(r.chords ?? [], truth.chords);
+  if (truth.chords) {
+    row.chordRoot = chordRootAccuracy(r.chords ?? [], truth.chords);
+    row.chordQuality = chordQualityAccuracy(r.chords ?? [], truth.chords);
+  }
+  if (truth.beats && r.rhythm) {
+    const b = beatScore(r.rhythm.beats, r.rhythm.bpm, truth.beats, truth.bpm ?? 0);
+    row.beatF1 = b.f1;
+    row.bpmRatio = b.bpmRatio;
+    row.beatError = b.meanAbsError;
+    const g = gridScore(r.tempo, truth.beats, truth.downbeats ?? []);
+    row.onGrid = g.onGrid;
+    row.gridError = g.meanAbsError;
+    row.downbeat = truth.downbeats ? g.downbeat : undefined;
+  }
+  if (truth.notes) {
+    const f = noteF1(r.notes ?? [], truth.notes);
+    row.noteF1 = f.f1;
+    row.notePrecision = f.precision;
+    row.noteRecall = f.recall;
+    row.noteCount = `${r.notes?.length ?? 0}/${truth.notes.length}`;
+  }
   if (truth.drums) Object.assign(row, drumF1(r.drums, truth.drums));
   rows.push(row);
   return row;
@@ -78,11 +114,11 @@ function writeReport() {
   const lines = [
     `# score — ${new Date().toISOString()}`,
     '',
-    '| 歌 | 分軌 | bass 音高時間 | bass F1 | 八度錯 | 和弦根音 | kick | snare | hat |',
-    '|---|---|---|---|---|---|---|---|---|',
+    '| 歌 | 分軌 | 拍 F1 | bpm 比 | 拍誤差 | 拍格 | 格誤差 | 強拍 | 音符 F1 | 音符 P/R | 顆數 預測/真 | 和弦根音 | 和弦品質 | bass 音高時間 | bass F1 | 八度錯 | kick | snare | hat |',
+    '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|',
     ...rows.map(
       (r) =>
-        `| ${r.name} | ${r.stems ? '有' : '無'} | ${pct(r.bassPitch)} | ${pct(r.bassF1)} | ${r.octaveErrors ?? '–'} | ${pct(r.chordRoot)} | ${pct(r.kick)} | ${pct(r.snare)} | ${pct(r.hat)} |`,
+        `| ${r.name} | ${r.stems ? '有' : '無'} | ${pct(r.beatF1)} | ${r.bpmRatio === undefined ? '–' : r.bpmRatio.toFixed(3)} | ${r.beatError === undefined ? '–' : `${(r.beatError * 1000).toFixed(0)} ms`} | ${pct(r.onGrid)} | ${r.gridError === undefined ? '–' : `${(r.gridError * 1000).toFixed(0)} ms`} | ${pct(r.downbeat)} | ${pct(r.noteF1)} | ${pct(r.notePrecision)}/${pct(r.noteRecall)} | ${r.noteCount ?? '–'} | ${pct(r.chordRoot)} | ${pct(r.chordQuality)} | ${pct(r.bassPitch)} | ${pct(r.bassF1)} | ${r.octaveErrors ?? '–'} | ${pct(r.kick)} | ${pct(r.snare)} | ${pct(r.hat)} |`,
     ),
   ];
   mkdirSync(join(ROOT, 'score'), { recursive: true });
@@ -119,8 +155,14 @@ test.each(truthFiles)('%s', async (file) => {
   const truth = JSON.parse(readFileSync(join(TRUTH_DIR, file), 'utf8')) as SongTruth;
   const pcm = decode(join(ROOT, truth.audio));
   const stems = truth.stems ? loadStems(join(ROOT, truth.stems), pcm.length) : undefined;
-  const r = await analyzeAudio(pcm, SR, () => {}, { stems });
-  score(truth.name, r, truth, stems !== undefined);
+  const { readings } = await runAnalysis(
+    { pcm, sampleRate: SR, left: pcm, right: pcm, stems, separate: false },
+    () => {},
+    undefined,
+    undefined,
+    { transcribe: transcribeNode },
+  );
+  score(truth.name, readings, truth, stems !== undefined);
 });
 
 test('report', () => {

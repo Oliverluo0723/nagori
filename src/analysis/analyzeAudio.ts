@@ -1,10 +1,10 @@
 import { detectBass } from './audio/bass';
 import { detectChords } from './audio/chords';
 import { detectDrums } from './audio/drums';
-import { analyzeRhythm } from './audio/rhythm';
+import { analyzeRhythm, downbeatIndex } from './audio/rhythm';
 import { analyzeSpectrum } from './audio/spectrum';
 import { mixStems, type Stems } from './stems/types';
-import { tempoMapFromBpm } from './tempo';
+import { tempoMapFromBeats, tempoMapFromBpm } from './tempo';
 import type { Readings, SourceKind } from './types';
 
 export type Stage =
@@ -57,7 +57,6 @@ export async function analyzeAudio(
   onProgress('rhythm', 0.2);
   const rhythm = await analyzeRhythm(pcm);
   const hasBeat = rhythm.bpm > 0;
-  const tempo = hasBeat ? tempoMapFromBpm(rhythm.bpm, rhythm.offset) : tempoMapFromBpm(DEFAULT_BPM);
   onProgress('drums', 0.4);
   let drums: Readings['drums'] = [];
   if (!stems) drums = await detectDrums(pcm, spectrum, sampleRate);
@@ -74,6 +73,14 @@ export async function analyzeAudio(
   if (!stems) bass = detectBass(pcm, sampleRate);
   else if (stemIsLive(stems.bass, pcm)) bass = detectBass(stems.bass, sampleRate);
   onProgress('bass', 1);
+  // tempo map 跟著拍點走（速度漂移的歌小節格才不會漂）；強拍看 kick 與和弦換的時刻
+  const downbeat = downbeatIndex(rhythm.beats, [
+    ...drums.filter((h) => h.kind === 'kick').map((h) => ({ time: h.time, weight: 1 })),
+    ...chords.map((c) => ({ time: c.time, weight: 2 })),
+  ]);
+  const tempo = hasBeat
+    ? tempoMapFromBeats(rhythm.beats, { downbeat })
+    : tempoMapFromBpm(DEFAULT_BPM);
   return {
     duration,
     tempo,

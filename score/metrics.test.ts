@@ -1,6 +1,16 @@
 import { expect, test } from 'vitest';
 import type { BassNote, ChordEvent, DrumHit } from '../src/analysis/types';
-import { chordRootAccuracy, drumF1, noteF1, pitchTimeAccuracy } from './metrics';
+import { tempoMapFromBpm } from '../src/analysis/tempo';
+import {
+  beatScore,
+  gridScore,
+  chordQualityAccuracy,
+  chordRootAccuracy,
+  drumF1,
+  isMinor,
+  noteF1,
+  pitchTimeAccuracy,
+} from './metrics';
 
 const note = (time: number, midi: number, duration = 0.5): BassNote => ({
   time,
@@ -76,4 +86,40 @@ test('drumF1 per kind with 50 ms tolerance', () => {
   expect(r.kick).toBeCloseTo(0.5, 5); // 1 of 2 matched, 2 predicted → p .5 r .5
   expect(r.snare).toBe(1);
   expect(r.hat).toBeCloseTo(2 / 3, 5); // p .5 r 1
+});
+
+test('chordQualityAccuracy: root right but mode wrong does not count when truth says minor', () => {
+  const am: ChordEvent = { time: 0, duration: 2, root: 9, name: 'Am', notes: [9, 0, 4] };
+  const a: ChordEvent = { time: 0, duration: 2, root: 9, name: 'A', notes: [9, 1, 4] };
+  const truth = [{ time: 0, duration: 2, root: 9, minor: true }];
+  expect(chordQualityAccuracy([am], truth)).toBe(1);
+  expect(chordQualityAccuracy([a], truth)).toBe(0);
+  // 真值沒標 minor：只看根音
+  expect(chordQualityAccuracy([a], [{ time: 0, duration: 2, root: 9 }])).toBe(1);
+  expect(isMinor({ time: 0, duration: 1, root: 9, name: 'Am', notes: [] })).toBe(true);
+  expect(isMinor({ time: 0, duration: 1, root: 9, name: 'Amaj7', notes: [] })).toBe(false);
+});
+
+test('beatScore: ±70 ms matches, bpm ratio and mean error reported', () => {
+  const truth = [0, 0.5, 1, 1.5, 2];
+  const r = beatScore([0.02, 0.5, 1.03, 1.6, 2], 121, truth, 120);
+  // 1.6 離 1.5 有 100 ms → 沒中
+  expect(r.precision).toBeCloseTo(4 / 5, 5);
+  expect(r.recall).toBeCloseTo(4 / 5, 5);
+  expect(r.bpmRatio).toBeCloseTo(121 / 120, 5);
+  expect(r.meanAbsError).toBeCloseTo(0.05 / 4, 5);
+  // 每個預測只能配一個真值
+  expect(beatScore([0.5], 120, [0.48, 0.52], 120).recall).toBeCloseTo(0.5, 5);
+  expect(beatScore([], 0, truth, 120).f1).toBe(0);
+});
+
+test('gridScore: constant map 10 ms early is on-grid; a 0.25 s shift puts every beat off', () => {
+  const truth = [1, 1.5, 2, 2.5, 3];
+  const good = gridScore(tempoMapFromBpm(120, 0.99), truth, [1, 3]);
+  expect(good.onGrid).toBe(1);
+  expect(good.meanAbsError).toBeCloseTo(0.01, 5);
+  expect(good.downbeat).toBe(1);
+  // 第一拍設在 1.5：拍格對，但強拍差一拍
+  expect(gridScore(tempoMapFromBpm(120, 1.5), truth, [1, 3]).downbeat).toBe(0);
+  expect(gridScore(tempoMapFromBpm(120, 1.25), truth).onGrid).toBe(0);
 });

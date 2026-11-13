@@ -6,6 +6,7 @@ import {
   buildTempoMap,
   positionAt,
   secondsToTicks,
+  tempoMapFromBeats,
   tempoMapFromBpm,
   ticksToSeconds,
   timeOfBar,
@@ -44,4 +45,38 @@ test('tempoMapFromBpm with an offset puts bar 1 beat 1 at the offset', () => {
   expect(secondsToTicks(map, 0.5)).toBeCloseTo(0);
   expect(ticksToSeconds(map, 0)).toBeCloseTo(0.5);
   expect(bpmAt(map, 10)).toBe(120);
+});
+
+test('tempoMapFromBeats: steady beats collapse to one tempo, positions land on the ticks', () => {
+  const beats = Array.from({ length: 16 }, (_, i) => 1.3 + i * 0.5);
+  const map = tempoMapFromBeats(beats);
+  expect(map.tempos).toEqual([{ ticks: 0, bpm: 120 }]);
+  expect(map.offset).toBeCloseTo(1.3);
+  expect(positionAt(map, 1.3)).toMatchObject({ bar: 1, beat: 1 });
+  expect(positionAt(map, 3.31)).toMatchObject({ bar: 2, beat: 1 });
+  expect(positionAt(map, 0.8).bar).toBe(0);
+});
+
+test('tempoMapFromBeats: a tempo ramp keeps bar positions on the detected beats', () => {
+  // 88 → 104 bpm 線性加速 48 拍
+  const beats = [1.3];
+  for (let i = 0; i < 48; i++) beats.push(beats[i] + 60 / (88 + (16 * i) / 48));
+  const map = tempoMapFromBeats(beats);
+  for (let i = 0; i < beats.length; i++) {
+    const pos = secondsToTicks(map, beats[i]) / map.ppq;
+    expect(Math.abs(pos - i)).toBeLessThan(0.05);
+  }
+  expect(bpmAt(map, beats[0])).toBeLessThan(92);
+  expect(bpmAt(map, beats[47])).toBeGreaterThan(100);
+  // 最後一拍之後沿用最後的速度
+  expect(bpmAt(map, beats[48] + 10)).toBeCloseTo(bpmAt(map, beats[47]), 0);
+});
+
+test('tempoMapFromBeats: downbeat index shifts bar 1 and drops the beats before it', () => {
+  const beats = Array.from({ length: 12 }, (_, i) => i * 0.5);
+  const map = tempoMapFromBeats(beats, { downbeat: 2 });
+  expect(map.offset).toBeCloseTo(1);
+  expect(positionAt(map, 1)).toMatchObject({ bar: 1, beat: 1 });
+  expect(positionAt(map, 0.5)).toMatchObject({ bar: 0, beat: 4 });
+  expect(tempoMapFromBeats([2]).tempos[0].bpm).toBe(120);
 });

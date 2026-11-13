@@ -6,7 +6,7 @@ import { analyzeSpectrum } from '../analysis/audio/spectrum';
 import { mergeReadings } from '../analysis/merge';
 import { OpfsStemStore, type StemStore, stemKey } from '../analysis/stems/cache';
 import { MODEL_MISSING } from '../analysis/stems/separate';
-import { tempoMapFromBpm } from '../analysis/tempo';
+import { tempoMapFromBeats, tempoMapFromBpm } from '../analysis/tempo';
 import type { Readings } from '../analysis/types';
 import { type AnalyzeFn, analyzeInline, analyzeInWorker } from '../analysis/workerClient';
 
@@ -168,8 +168,19 @@ export function audioDuration(file: File): Promise<number> {
   });
 }
 
-/** 換 tempo map（BPM 候選或第一拍微調），其他欄位不動。 */
+/**
+ * 換 tempo map（BPM 候選或第一拍微調），其他欄位不動。
+ * bpm 還是偵測到的那個時保留跟著拍點走的 map，只把整條拍點平移到新的第一拍；
+ * 選了別的候選（×2、÷2…）才退回固定 bpm。
+ */
 export function applyTempo(readings: Readings, bpm: number, offset: number): Readings {
+  const r = readings.rhythm;
+  const current = readings.tempo.offset ?? 0;
+  const downbeat = r ? r.beats.findIndex((b) => Math.abs(b - current) < 1e-6) : -1;
+  if (r && downbeat >= 0 && Math.abs(bpm - r.bpm) < 0.05) {
+    const shift = offset - current;
+    return { ...readings, tempo: tempoMapFromBeats(r.beats.map((b) => b + shift), { downbeat }) };
+  }
   return { ...readings, tempo: tempoMapFromBpm(bpm, offset) };
 }
 
