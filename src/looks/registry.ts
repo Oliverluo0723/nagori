@@ -1,18 +1,25 @@
 import { arcadeLook } from './arcade';
+import { auraLook } from './aura';
 import { blotLook } from './blot';
 import { bodiesLook } from './bodies';
+import { chakraLook } from './chakra';
+import { characterLook } from './character';
 import { cometLook } from './comet';
 import { coronaLook } from './corona';
 import { dewLook } from './dew';
 import { discLook } from './disc';
 import { drumLook } from './drum';
+import { figureLook } from './figure';
 import { flowLook } from './flow';
+import { formLook } from './form';
 import { fountainLook } from './fountain';
 import { gelLook } from './gel';
 import { glideLook } from './glide';
 import { glyphLook } from './glyph';
 import { gridLook } from './grid';
 import { grooveLook } from './groove';
+import { hatchLook } from './hatch';
+import { inkLook } from './ink';
 import { kaleidoLook } from './kaleido';
 import { lidarLook } from './lidar';
 import { meshLook } from './mesh';
@@ -26,6 +33,7 @@ import { spectrumLook } from './spectrum';
 import { starsLook } from './stars';
 import { strataLook } from './strata';
 import { stringLook } from './string';
+import { traceLook } from './trace';
 import { trajectoryLook } from './trajectory';
 import type { Look } from './types';
 import { wheelLook } from './wheel';
@@ -61,4 +69,12 @@ export const looks: Record<string, Look> = {
   [pegboardLook.id]: pegboardLook,
   [trajectoryLook.id]: trajectoryLook,
   [paintLook.id]: paintLook,
+  [hatchLook.id]: hatchLook,
+  [inkLook.id]: inkLook,
+  [traceLook.id]: traceLook,
+  [formLook.id]: formLook,
+  [figureLook.id]: figureLook,
+  [auraLook.id]: auraLook,
+  [chakraLook.id]: chakraLook,
+  [characterLook.id]: characterLook,
 };
