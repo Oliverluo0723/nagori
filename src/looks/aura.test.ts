@@ -36,8 +36,8 @@ test('an arena circle; two orbs touching at the centre, each sized by its own ba
   expect(arena[0].args).toEqual([540, 960, 1080 * 0.72]);
   const hazes = opsOf(p, 'haze').map((o) => o.args as number[]);
   expect(hazes).toHaveLength(HAZES_PER_PALETTE);
-  const rUp = hazes[UP][2] / 1.6;
-  const rLo = hazes[LO][2] / 1.6;
+  const rUp = hazes[UP][2] / 1.9;
+  const rLo = hazes[LO][2] / 1.9;
   expect(hazes[UP][1] + rUp).toBeCloseTo(960, 5);
   expect(hazes[LO][1] - rLo).toBeCloseTo(960, 5);
   expect(rLo).toBeGreaterThan(rUp);

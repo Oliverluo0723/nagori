@@ -4,11 +4,11 @@ import type { DrumHit } from '../analysis/types';
 import { paperInk } from '../compose/themes';
 import { RecordingPainter } from './painter/recording';
 import { looks } from './registry';
-import { BASS_LINES, kicksIn, LINES, traceLook } from './trace';
+import { BASS_LINES, CURL_LINES, kicksIn, LINES, traceLook } from './trace';
 
 const kick = (time: number): DrumHit => ({ time, kind: 'kick', velocity: 1 });
-/** 每個 kick 在最低幾條線上各捲三圈弧。 */
-const ARCS_PER_KICK = BASS_LINES * 3;
+/** 每個捲弧在最低三條線上各捲三圈。 */
+const ARCS_PER_KICK = CURL_LINES * 3;
 
 test('registry exposes trace as number 33', () => {
   expect(looks.trace).toBe(traceLook);
@@ -40,7 +40,7 @@ test('deterministic; 22 lines with a dot at each right end; paper issues no glow
   expect(fills.slice(BASS_LINES).every((o) => o.args[0] === paperInk.ink)).toBe(true);
 });
 
-test('a kick inside the window curls three arcs on each of the lowest lines; capped at 24', () => {
+test('the first kick of each bar curls three arcs on each of the lowest lines', () => {
   const s = flatSpectrum(60, 0.5);
   const none = new RecordingPainter();
   traceLook.draw(none, makeCtx(12, { spectrum: s, drums: [kick(30)] }));
@@ -53,11 +53,14 @@ test('a kick inside the window curls three arcs on each of the lowest lines; cap
   expect(arc[0].y).toBeCloseTo(base);
   expect(Math.min(...arc.map((q) => q.y))).toBeLessThan(base - 10);
 
+  // 120 BPM 一小節 2 秒；0.5–10.4 秒每 0.1 秒一個 kick，只有每小節第一個捲
   const many = Array.from({ length: 100 }, (_, i) => kick(0.5 + i * 0.1));
-  expect(kicksIn(many, 0, 12)).toHaveLength(24);
+  const tempo = makeCtx(0, {}).readings.tempo;
+  const curls = kicksIn(many, tempo, 0, 12);
+  expect(curls.map((k) => k.time.toFixed(1))).toEqual(['10.0', '8.0', '6.0', '4.0', '2.0', '0.5']);
   const dense = new RecordingPainter();
   traceLook.draw(dense, makeCtx(12, { spectrum: s, drums: many }));
-  expect(opsOf(dense, 'polyline').length - opsOf(none, 'polyline').length).toBe(24 * ARCS_PER_KICK);
+  expect(opsOf(dense, 'polyline').length - opsOf(none, 'polyline').length).toBe(6 * ARCS_PER_KICK);
 });
 
 test('a band louder than usual lifts its line end; silence still draws 22 flat lines', () => {

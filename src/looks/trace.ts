@@ -1,5 +1,5 @@
 import { positionAt, timeOfBar } from '../analysis/tempo';
-import type { DrumHit, Spectrum } from '../analysis/types';
+import type { DrumHit, Spectrum, TempoMap } from '../analysis/types';
 import { midiName } from './glide';
 import type { Painter, Point } from './painter/painter';
 import { bandSeries, bassAt, paramNum, smoothAt, softDot } from './sheet';
@@ -18,9 +18,12 @@ export const BASS_LINES = 6;
 const RATE = 30;
 /** 「現在」在可用寬度的位置；右邊 14% 只有尾端的點。 */
 const NOW_X = 0.86;
-/** 每個 kick 畫幾圈弧、最多畫最近幾個 kick。 */
+/** 每個捲弧畫幾圈、捲在最低幾條線上、最多畫最近幾個。每小節只有第一個 kick 捲（每個 kick 都捲會糊成一片）。 */
 const ARCS = 3;
+export const CURL_LINES = 3;
 const MAX_KICKS = 24;
+/** 線的平滑秒數：太短會變成鋸齒雜訊，Oto 的線是圓滑的山脊。 */
+const LINE_SMOOTH = 0.2;
 /** 每條線的正規化分位數：山腳與山頂。 */
 const Q_LO = 0.1;
 const Q_HI = 0.98;
@@ -48,9 +51,9 @@ export function bands(s: Spectrum): Band[] {
   return out;
 }
 
-/** 第 i 條線在 time 的值，0..1（平滑 0.05 s、依整首歌的分位數拉開）。 */
+/** 第 i 條線在 time 的值，0..1（平滑 LINE_SMOOTH、依整首歌的分位數拉開）。 */
 function valueAt(b: Band, fps: number, time: number): number {
-  return stretch(smoothAt(b.series, fps, time, 0.05), b.lo, b.hi);
+  return stretch(smoothAt(b.series, fps, time, LINE_SMOOTH), b.lo, b.hi);
 }
 
 interface Layout {
@@ -100,15 +103,22 @@ function halfCircle(cx: number, cy: number, r: number, n = 24): Point[] {
   return out;
 }
 
-/** 視窗內最近的 kick（最多 MAX_KICKS 個），由新到舊。 */
-export function kicksIn(drums: DrumHit[], from: number, to: number): DrumHit[] {
+/** 視窗內每小節的第一個 kick（最多 MAX_KICKS 個），由新到舊。 */
+export function kicksIn(drums: DrumHit[], tempo: TempoMap, from: number, to: number): DrumHit[] {
   const out: DrumHit[] = [];
+  let pending: DrumHit | null = null;
+  let pendingBar = -1;
   for (let i = drums.length - 1; i >= 0 && out.length < MAX_KICKS; i--) {
     const d = drums[i];
     if (d.time > to) continue;
     if (d.time < from) break;
-    if (d.kind === 'kick') out.push(d);
+    if (d.kind !== 'kick') continue;
+    const bar = positionAt(tempo, d.time).bar;
+    if (pending && bar !== pendingBar) out.push(pending);
+    pending = d;
+    pendingBar = bar;
   }
+  if (pending && out.length < MAX_KICKS) out.push(pending);
   return out;
 }
 
@@ -148,8 +158,8 @@ function draw(p: Painter, ctx: LookContext): void {
     p.text(String(bar), xOf(time), h * 0.965, { size: L.font, font: 'mono', align: 'center' });
   }
 
-  // 捲弧：視窗內的每個 kick 在最低幾條線上捲三圈同心半圓，越舊越淡
-  const kicks = kicksIn(ctx.readings.drums, from, t);
+  // 捲弧：每小節第一個 kick 在最低三條線上捲三圈同心半圓，越舊越淡
+  const kicks = kicksIn(ctx.readings.drums, ctx.readings.tempo, from, t);
   if (kicks.length) {
     if (theme.glow) p.blend('add');
     p.noFill();
@@ -157,7 +167,7 @@ function draw(p: Painter, ctx: LookContext): void {
       const alpha = 0.5 * (1 - (t - k.time) / win);
       p.stroke(theme.accent, Math.max(0.5, unit * 0.001), alpha);
       const x = xOf(k.time);
-      for (let i = 0; i < BASS_LINES; i++) {
+      for (let i = 0; i < CURL_LINES; i++) {
         for (let a = 1; a <= ARCS; a++) p.polyline(halfCircle(x, baseY(L, i), a * 0.06 * unit));
       }
     }

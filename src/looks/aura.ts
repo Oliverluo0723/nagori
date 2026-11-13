@@ -125,9 +125,10 @@ interface Orb {
 function orb(p: Painter, theme: LookContext['theme'], o: Orb, color: string, alpha: number): void {
   const core = theme.glow ? mixHex(color, theme.ink, 0.35) : color;
   const layers: [number, number, string][] = [
-    [1.6, 0.25, color],
-    [1.05, 0.5, color],
-    [0.55, 0.8, core],
+    // haze 會淡到透明，看得見的只有半徑一半左右；層要比球大，兩球看起來才會在中心相碰
+    [1.9, 0.3, color],
+    [1.4, 0.55, color],
+    [0.9, 0.85, core],
   ];
   const gain = theme.glow ? 1 : 0.7;
   for (const [k, a, c] of layers) {
@@ -159,8 +160,8 @@ function draw(p: Painter, ctx: LookContext): void {
   const dark = theme.glow;
   const highs = levelOf(s, HIGH_BANDS, t);
   const lows = levelOf(s, LOW_BANDS, t);
-  const rUp = unit * (0.1 + 0.07 * highs) * size;
-  const rLo = unit * (0.12 + 0.08 * lows) * size;
+  const rUp = unit * (0.12 + 0.06 * highs) * size;
+  const rLo = unit * (0.13 + 0.07 * lows) * size;
 
   // 跳躍：往上是負的 y；落地中（高度在減少）就壓扁
   const leap = leapAt(drums, t);
