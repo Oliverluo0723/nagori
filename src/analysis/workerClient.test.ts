@@ -68,7 +68,7 @@ test('runAnalysis: notes stage runs after bass and fills notes + source', async 
     undefined,
     { transcribe: fn, store: new MemoryNoteStore() },
   );
-  expect(stages.slice(-2)).toEqual(['bass', 'notes']);
+  expect(stages.slice(-2)).toEqual(['chords', 'notes']);
   expect(out.readings.notes).toEqual(NOTES);
   expect(out.readings.source?.notes).toBe('audio');
   expect(out.notesError).toBeUndefined();

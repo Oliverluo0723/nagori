@@ -51,8 +51,10 @@ test('fromBasicPitch maps amplitude to velocity and tidies', () => {
 });
 
 test('thresholdsKey changes with every threshold', () => {
-  const a = thresholdsKey({ onset: 0.5, frame: 0.3, minFrames: 11 });
-  expect(a).not.toBe(thresholdsKey({ onset: 0.6, frame: 0.3, minFrames: 11 }));
-  expect(a).not.toBe(thresholdsKey({ onset: 0.5, frame: 0.2, minFrames: 11 }));
-  expect(a).not.toBe(thresholdsKey({ onset: 0.5, frame: 0.3, minFrames: 9 }));
+  const base = { onset: 0.5, frame: 0.3, minFrames: 11, energyTolerance: 11 };
+  const a = thresholdsKey(base);
+  expect(a).not.toBe(thresholdsKey({ ...base, onset: 0.6 }));
+  expect(a).not.toBe(thresholdsKey({ ...base, frame: 0.2 }));
+  expect(a).not.toBe(thresholdsKey({ ...base, minFrames: 9 }));
+  expect(a).not.toBe(thresholdsKey({ ...base, energyTolerance: 30 }));
 });

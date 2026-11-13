@@ -179,7 +179,13 @@ export function applyTempo(readings: Readings, bpm: number, offset: number): Rea
   const downbeat = r ? r.beats.findIndex((b) => Math.abs(b - current) < 1e-6) : -1;
   if (r && downbeat >= 0 && Math.abs(bpm - r.bpm) < 0.05) {
     const shift = offset - current;
-    return { ...readings, tempo: tempoMapFromBeats(r.beats.map((b) => b + shift), { downbeat }) };
+    return {
+      ...readings,
+      tempo: tempoMapFromBeats(
+        r.beats.map((b) => b + shift),
+        { downbeat },
+      ),
+    };
   }
   return { ...readings, tempo: tempoMapFromBpm(bpm, offset) };
 }

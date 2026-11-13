@@ -1,4 +1,5 @@
-import { analyzeAudio, type Progress } from './analyzeAudio';
+import { analyzeAudio, buildTempo, type Progress } from './analyzeAudio';
+import { chordsFromNotes } from './audio/chords';
 import { type NoteStore, noteKey, OpfsNoteStore, opfsAvailable } from './audio/noteCache';
 import { NOTE_THRESHOLDS, thresholdsKey } from './audio/notes';
 import { NOTES_MODEL_MISSING, type TranscribeFn, transcribeNotes } from './audio/transcribe';
@@ -135,14 +136,24 @@ export async function runAnalysis(
     onProgress,
     notesDeps,
   );
-  const readings: Readings = {
+  const kind = stems ? 'stem' : 'audio';
+  let readings: Readings = {
     ...audio,
     notes,
-    source: audio.source && {
-      ...audio.source,
-      notes: notes.length ? (stems ? 'stem' : 'audio') : 'none',
-    },
+    source: audio.source && { ...audio.source, notes: notes.length ? kind : 'none' },
   };
+  // 有音符就用音符重算和弦（比 HPCP 準得多），強拍也跟著和弦換的時刻重投
+  if (notes.length > 0 && audio.rhythm) {
+    const chords = chordsFromNotes(notes, audio.rhythm.beats, audio.bass);
+    if (chords.length > 0) {
+      readings = {
+        ...readings,
+        chords,
+        tempo: buildTempo(audio.rhythm, audio.drums, chords),
+        source: readings.source && { ...readings.source, chords: kind },
+      };
+    }
+  }
   return { readings, separated: stems !== undefined, separationError, notesError };
 }
 

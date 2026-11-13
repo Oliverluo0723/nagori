@@ -23,7 +23,7 @@ test('analyzeAudio fills tempo, drums, chords, bass, key and spectrum from audio
     bass: 'audio',
     key: 'audio',
   });
-  expect(stages).toEqual(['spectrum', 'rhythm', 'drums', 'chords', 'bass']);
+  expect(stages).toEqual(['spectrum', 'rhythm', 'drums', 'bass', 'chords']);
   expect(r.duration).toBeCloseTo(17, 1);
 }, 60000);
 

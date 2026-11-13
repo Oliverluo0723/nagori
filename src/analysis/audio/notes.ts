@@ -16,10 +16,21 @@ export interface NoteThresholds {
   frame: number;
   /** 最短音長，以模型 frame 計（約 86 fps，11 ≈ 0.12 s） */
   minFrames: number;
+  /** 一顆音中間允許幾個 frame 掉到 frame 門檻以下而不斷掉（Basic Pitch 的 energyTolerance） */
+  energyTolerance: number;
 }
 
-/** spike（2026-11-12）用的值，當起點 */
-export const NOTE_THRESHOLDS: NoteThresholds = { onset: 0.5, frame: 0.3, minFrames: 11 };
+/**
+ * 2026-11-13 用 `pnpm score` 的合成歌掃出來的值（onset 0.6、frame 0.4、energyTolerance 30）：
+ * 比起點（0.5 / 0.3 / 11）音符 F1 平均 45% → 59%，真歌的顆數少一半（KILL LOVE 7.5 → 3.8 顆/秒），
+ * 多砍掉的幾乎都是八度泛音假音。
+ */
+export const NOTE_THRESHOLDS: NoteThresholds = {
+  onset: 0.6,
+  frame: 0.4,
+  minFrames: 11,
+  energyTolerance: 30,
+};
 
 /** Basic Pitch noteFramesToTime 吐出來的形狀 */
 export interface RawNote {
@@ -101,5 +112,5 @@ export function fromBasicPitch(raw: readonly RawNote[]): NoteEvent[] {
 
 /** 快取 key 的門檻後綴：門檻一改，舊快取自然失效 */
 export function thresholdsKey(th: NoteThresholds): string {
-  return `o${th.onset}-f${th.frame}-m${th.minFrames}`;
+  return `o${th.onset}-f${th.frame}-m${th.minFrames}-e${th.energyTolerance}`;
 }

@@ -5,7 +5,7 @@ import { analyzeRhythm, downbeatIndex } from './audio/rhythm';
 import { analyzeSpectrum } from './audio/spectrum';
 import { mixStems, type Stems } from './stems/types';
 import { tempoMapFromBeats, tempoMapFromBpm } from './tempo';
-import type { Readings, SourceKind } from './types';
+import type { ChordEvent, DrumHit, Readings, RhythmInfo, SourceKind, TempoMap } from './types';
 
 export type Stage =
   | 'decode'
@@ -39,6 +39,23 @@ function stemIsLive(stem: Float32Array, mix: Float32Array): boolean {
 }
 
 /**
+ * tempo map 跟著拍點走（速度漂移的歌小節格才不會漂）；強拍看 kick 與和弦換的時刻投票。
+ * 和弦換了（例如轉譜之後用 notes 重算）要再叫一次，強拍才會跟著更新。
+ */
+export function buildTempo(
+  rhythm: RhythmInfo,
+  drums: readonly DrumHit[],
+  chords: readonly ChordEvent[],
+): TempoMap {
+  if (!(rhythm.bpm > 0)) return tempoMapFromBpm(DEFAULT_BPM);
+  const downbeat = downbeatIndex(rhythm.beats, [
+    ...drums.filter((h) => h.kind === 'kick').map((h) => ({ time: h.time, weight: 1 })),
+    ...chords.map((c) => ({ time: c.time, weight: 2 })),
+  ]);
+  return tempoMapFromBeats(rhythm.beats, { downbeat });
+}
+
+/**
  * 純音訊：五個模組依序跑，產出完整的 Readings。pcm 必須是 44.1 kHz 單聲道。
  * 有 stems 時：drums 吃 drums 軌、bass 吃 bass 軌、chords/key 吃 other + bass；
  * spectrum 與節拍永遠用混音。
@@ -62,25 +79,19 @@ export async function analyzeAudio(
   if (!stems) drums = await detectDrums(pcm, spectrum, sampleRate);
   else if (stemIsLive(stems.drums, pcm))
     drums = await detectDrums(stems.drums, analyzeSpectrum(stems.drums, sampleRate), sampleRate);
-  onProgress('chords', 0.6);
-  const harmonic = stems ? mixStems(stems, ['other', 'bass']) : pcm;
-  const { chords, key } =
-    !stems || stemIsLive(harmonic, pcm)
-      ? await detectChords(harmonic, rhythm.beats)
-      : { chords: [], key: undefined };
-  onProgress('bass', 0.8);
+  onProgress('bass', 0.6);
   let bass: Readings['bass'] = [];
   if (!stems) bass = detectBass(pcm, sampleRate);
   else if (stemIsLive(stems.bass, pcm)) bass = detectBass(stems.bass, sampleRate);
-  onProgress('bass', 1);
-  // tempo map 跟著拍點走（速度漂移的歌小節格才不會漂）；強拍看 kick 與和弦換的時刻
-  const downbeat = downbeatIndex(rhythm.beats, [
-    ...drums.filter((h) => h.kind === 'kick').map((h) => ({ time: h.time, weight: 1 })),
-    ...chords.map((c) => ({ time: c.time, weight: 2 })),
-  ]);
-  const tempo = hasBeat
-    ? tempoMapFromBeats(rhythm.beats, { downbeat })
-    : tempoMapFromBpm(DEFAULT_BPM);
+  onProgress('chords', 0.8);
+  const harmonic = stems ? mixStems(stems, ['other', 'bass']) : pcm;
+  // bass 先算：和弦用它分辨 Am7 / C 與轉位
+  const { chords, key } =
+    !stems || stemIsLive(harmonic, pcm)
+      ? await detectChords(harmonic, rhythm.beats, bass)
+      : { chords: [], key: undefined };
+  onProgress('chords', 1);
+  const tempo = buildTempo(rhythm, drums, chords);
   return {
     duration,
     tempo,

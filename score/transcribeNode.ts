@@ -74,7 +74,18 @@ export const transcribeNode: TranscribeFn = async (pcm, sampleRate, opts = {}) =
   const raw: RawNote[] = bp.noteFramesToTime(
     bp.addPitchBendsToNoteEvents(
       contours,
-      bp.outputToNotesPoly(frames, onsets, th.onset, th.frame, th.minFrames),
+      bp.outputToNotesPoly(
+        frames,
+        onsets,
+        th.onset,
+        th.frame,
+        th.minFrames,
+        true,
+        null,
+        null,
+        true,
+        th.energyTolerance,
+      ),
     ),
   );
   return fromBasicPitch(raw);

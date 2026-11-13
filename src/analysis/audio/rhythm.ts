@@ -66,7 +66,8 @@ export function trimSilentTicks(beats: number[], pcm: Float32Array, sampleRate: 
   const floor = peak * 10 ** (SILENCE_DB / 20);
   const silent = (t: number) => {
     const c = Math.floor(t / HOP_SEC);
-    for (let i = Math.max(0, c - 1); i <= Math.min(n - 1, c + 1); i++) if (rms[i] >= floor) return false;
+    for (let i = Math.max(0, c - 1); i <= Math.min(n - 1, c + 1); i++)
+      if (rms[i] >= floor) return false;
     return true;
   };
   let lo = 0;
