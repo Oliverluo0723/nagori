@@ -147,14 +147,14 @@ function draw(p: Painter, ctx: LookContext): void {
   const k = dark ? 1 : 0.6;
   p.blend(dark ? 'add' : 'multiply');
   const neutral = dark ? theme.ink : theme.line;
-  p.haze(cx, cy + h * 0.03, R, neutral, 0.4 * k);
-  p.haze(cx, cy - h * 0.14, R * 0.8, neutral, 0.28 * k);
-  p.haze(cx, cy + h * 0.16, R * 0.8, neutral, 0.22 * k);
+  p.haze(cx, cy + h * 0.03, R, neutral, 0.22 * k);
+  p.haze(cx, cy - h * 0.14, R * 0.8, neutral, 0.14 * k);
+  p.haze(cx, cy + h * 0.16, R * 0.8, neutral, 0.1 * k);
   p.haze(cx, cy - h * 0.24, R * 0.85, cool, (0.14 + 0.36 * highs) * k);
   p.haze(cx, cy - h * 0.34, R * 0.5, cooler, (0.06 + 0.24 * highs) * k);
   p.haze(cx, cy + h * 0.24, R * 0.85, warm, (0.18 + 0.4 * lows) * k);
   p.haze(cx, cy + h * 0.36, R * 0.5, warmer, (0.1 + 0.3 * lows) * k);
-  p.haze(cx, cy, R * 0.4, neutral, 0.3 * k);
+  p.haze(cx, cy, R * 0.4, neutral, 0.12 * k);
   p.blend('normal');
 
   // 柱子：18 個色塊，air 在頂、sub 在底
