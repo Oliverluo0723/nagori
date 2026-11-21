@@ -92,7 +92,7 @@ type ExportState =
 
 /** 檔名：歌名-look-起點，去掉檔案系統不收的字元。 */
 function exportFileName(song: string, lookId: string, start: number): string {
-  const safe = song.replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'oto';
+  const safe = song.replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'nagori';
   return `${safe}-${lookId}-${clock(start).replace(':', 'm')}s.mp4`;
 }
 

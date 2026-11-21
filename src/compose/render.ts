@@ -30,7 +30,7 @@ export const DEFAULT_CANVAS: CanvasStyle = {
   padBottom: 0.17,
   gap: 0.03,
   footer: true,
-  signature: 'oto',
+  signature: 'nagori',
 };
 
 /** 格子區與格距（px）。沒有 canvas 設定就是整張、零間距。 */
