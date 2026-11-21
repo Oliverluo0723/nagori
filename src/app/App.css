@@ -767,3 +767,14 @@ kbd {
   gap: 6px;
   margin-top: 8px;
 }
+
+/* 彈奏模式：播放列的位置換成一行鍵位提示 */
+.transport.live-hint {
+  justify-content: center;
+  min-height: 44px;
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  white-space: pre;
+}

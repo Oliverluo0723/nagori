@@ -100,6 +100,8 @@ export interface Readings {
   key?: KeyInfo;
   /** 每一顆音（MIDI 非鼓軌，或轉譜） */
   notes?: NoteEvent[];
+  /** 鋼琴捲的列範圍 [最低, 最高]；有給就用，沒給由 notes 算（即時彈奏時固定，免得列跳動） */
+  noteRange?: [number, number];
   /** 純音訊節拍分析的結果（有的話），給 BPM 候選與第一拍微調用 */
   rhythm?: RhythmInfo;
   /** 每個欄位是哪裡來的 */

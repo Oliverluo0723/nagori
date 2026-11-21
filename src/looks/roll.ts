@@ -85,7 +85,7 @@ function draw(p: Painter, ctx: LookContext): void {
   const notes = readings.notes ?? [];
   const tempo = readings.tempo;
   const bars = Math.max(1, Math.min(8, Math.round(paramNum(ctx, params, 'bars'))));
-  const [lo, hi] = rollRange(notes);
+  const [lo, hi] = readings.noteRange ?? rollRange(notes);
   const rows = hi - lo + 1;
   const u = Math.min(w, h);
 
@@ -241,7 +241,7 @@ function draw(p: Painter, ctx: LookContext): void {
 function readouts(ctx: LookContext): Readout[] {
   const notes = ctx.readings.notes ?? [];
   const bars = Math.max(1, Math.min(8, Math.round(paramNum(ctx, params, 'bars'))));
-  const [lo, hi] = rollRange(notes);
+  const [lo, hi] = ctx.readings.noteRange ?? rollRange(notes);
   const src = ctx.readings.source?.notes ?? (notes.length ? 'audio' : 'none');
   return [
     { label: 'WINDOW', value: `${bars} ${bars === 1 ? 'bar' : 'bars'}` },

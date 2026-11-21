@@ -6,6 +6,13 @@ import { themes } from '../compose/themes';
 import type { Composition } from '../compose/types';
 import { type ClipUrls, PreviewVideos } from './videoPreview';
 
+/** 即時彈奏：時間與讀數由它給，不讀音檔。 */
+export interface LiveSource {
+  /** 現在的時間（秒） */
+  now(): number;
+  readings(now: number): Readings;
+}
+
 export interface Preview {
   setComposition(c: Composition): void;
   setReadings(r: Readings): void;
@@ -14,6 +21,11 @@ export interface Preview {
   play(): Promise<void>;
   pause(): void;
   seek(t: number): void;
+  /**
+   * 有來源：暫停音檔，畫面迴圈一直跑，時間和讀數都向來源要。
+   * null：停迴圈，回到讀 audio 和 setReadings 給的讀數。
+   */
+  setLive(source: LiveSource | null): void;
   destroy(): void;
 }
 
@@ -53,6 +65,7 @@ export function createPreview(opts: PreviewOptions): Preview {
 
   let composition: Composition | null = null;
   let readings: Readings | null = null;
+  let live: LiveSource | null = null;
   let raf = 0;
   let surfaces: P5SurfaceProvider | null = null;
   // 暫停中影片 seek 完要補畫一次；播放中迴圈自己會畫
@@ -74,14 +87,15 @@ export function createPreview(opts: PreviewOptions): Preview {
   });
 
   const drawFrame = () => {
-    if (!composition || !readings || !surfaces) return;
+    const t = live ? live.now() : audio.currentTime;
+    const r = live ? live.readings(t) : readings;
+    if (!composition || !r || !surfaces) return;
     const t0 = performance.now();
-    const t = audio.currentTime;
-    videos.sync(composition.root, t, raf !== 0 && !audio.paused);
+    videos.sync(composition.root, t, raf !== 0 && !live && !audio.paused);
     renderFrame({
       composition,
       t,
-      readings,
+      readings: r,
       surfaces,
       target: { w: width, h: height, ctx },
       videos,
@@ -129,19 +143,28 @@ export function createPreview(opts: PreviewOptions): Preview {
       drawFrame();
     },
     async play() {
+      if (live) return;
       await audio.play();
       stopLoop();
       loop();
     },
     pause() {
       audio.pause();
-      stopLoop();
+      if (!live) stopLoop();
       videos.pauseAll();
       drawFrame();
     },
     seek(t) {
       audio.currentTime = t;
       drawFrame();
+    },
+    setLive(source) {
+      live = source;
+      audio.pause();
+      videos.pauseAll();
+      stopLoop();
+      if (live) loop();
+      else drawFrame();
     },
     destroy() {
       stopLoop();

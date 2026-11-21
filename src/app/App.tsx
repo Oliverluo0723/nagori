@@ -18,6 +18,12 @@ import { contentBox, DEFAULT_CANVAS } from '../compose/render';
 import { themes } from '../compose/themes';
 import type { Composition, LayoutNode, Split, VideoLayer } from '../compose/types';
 import { dragAlign, newVideoLayer } from '../compose/video';
+import { nextBeats } from '../live/beat';
+import { liveKeyFor, releasesAll } from '../live/input';
+import { KEY_HINT, KEY_MAP } from '../live/keys';
+import { isLiveLook, liveLayout } from '../live/looks';
+import { createLiveSession } from '../live/readings';
+import { createSynth } from '../live/synth';
 import { looks } from '../looks/registry';
 import type { Look } from '../looks/types';
 import { exportVideo } from '../render/exportVideo';
@@ -58,6 +64,19 @@ const GROUPED_LOOKS = LOOK_GROUPS.map((g) => ({
 
 /** 鍵盤上下切換照分組後的順序走 */
 const LOOK_LIST = GROUPED_LOOKS.flatMap((g) => g.looks);
+
+/** 彈奏模式只列讀得到彈奏資料的 look */
+const LIVE_GROUPED_LOOKS = GROUPED_LOOKS.map((g) => ({
+  ...g,
+  looks: g.looks.filter((lk) => isLiveLook(lk.id)),
+})).filter((g) => g.looks.length > 0);
+const LIVE_LOOK_LIST = LIVE_GROUPED_LOOKS.flatMap((g) => g.looks);
+
+/** 打開時的版面：上下兩格，換成彈奏用的 look（鋼琴捲、鼓格） */
+function initialLayout(): LayoutNode {
+  const stack = PRESETS.find((p) => p.id === 'stack') ?? PRESETS[0];
+  return liveLayout(stack.build());
+}
 
 function clock(s: number): string {
   const m = Math.floor(s / 60);
@@ -110,7 +129,7 @@ const STAGE_TEXT: Record<Stage, string> = {
 export function App() {
   const { state, drop, setTempo } = useProject();
   const [themeId, setThemeId] = useState<string>('darkGlow');
-  const [root, setRoot] = useState<LayoutNode>(() => PRESETS[0].build());
+  const [root, setRoot] = useState<LayoutNode>(initialLayout);
   const [selectedId, setSelectedId] = useState('c1');
   const [framed, setFramed] = useState(true);
   const [signature, setSignature] = useState(DEFAULT_CANVAS.signature);
@@ -158,6 +177,11 @@ export function App() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const previewRef = useRef<Preview | null>(null);
 
+  // 沒有歌（或丟歌失敗）就是彈奏模式：鍵盤出聲，畫面即時跟著彈的東西
+  const liveMode = state.status === 'empty' || state.status === 'error';
+  const lookGroups = liveMode ? LIVE_GROUPED_LOOKS : GROUPED_LOOKS;
+  const lookList = liveMode ? LIVE_LOOK_LIST : LOOK_LIST;
+
   const songTitle = state.status === 'ready' ? state.name : undefined;
   const composition = useMemo<Composition>(
     () => ({
@@ -192,6 +216,86 @@ export function App() {
       previewRef.current = null;
     };
   }, []);
+
+  // 彈奏模式：要在建立預覽的 effect 之後，previewRef 才有東西
+  useEffect(() => {
+    const preview = previewRef.current;
+    if (!liveMode || !preview) return;
+    // 從有歌（或分析中）回到彈奏：格子裡不是彈奏用的 look 就換掉，免得有格子不跟著鍵盤動
+    setRoot((r) => liveLayout(r));
+    const session = createLiveSession();
+    const synth = createSynth();
+    /** 第一次按鍵的 timeStamp（毫秒）；之前時間停在 0 */
+    let zero: number | null = null;
+    const secs = (ms: number) => (zero === null ? 0 : (ms - zero) / 1000);
+    preview.setLive({ now: () => secs(performance.now()), readings: (t) => session.readings(t) });
+    /** 彈奏時間 0 對應的音訊時鐘秒數；第一次按鍵、AudioContext 建好後才有 */
+    let audioZero: number | null = null;
+    let scheduledUntil = 0;
+    // 自動節奏：用音訊時鐘預排，不靠畫面迴圈，拍子才不會跟著掉幀抖
+    const beatTimer = window.setInterval(() => {
+      if (audioZero === null) return;
+      const r = nextBeats(scheduledUntil, secs(performance.now()));
+      scheduledUntil = r.until;
+      for (const h of r.hits) synth.drum(h.kind, audioZero + h.time);
+    }, 25);
+
+    const onDown = (e: KeyboardEvent) => {
+      const key = liveKeyFor({
+        code: e.code,
+        repeat: e.repeat,
+        metaKey: e.metaKey,
+        ctrlKey: e.ctrlKey,
+        altKey: e.altKey,
+        target: (e.target as HTMLElement | null)?.tagName ?? '',
+        type: (e.target as HTMLInputElement | null)?.type,
+      });
+      if (!key) return;
+      e.preventDefault();
+      if (zero === null) zero = e.timeStamp;
+      const t = secs(e.timeStamp);
+      if (key.kind === 'note') {
+        session.noteOn(key.midi, t);
+        synth.noteOn(key.midi);
+      } else {
+        session.drum(key.drum, t);
+        synth.drum(key.drum);
+      }
+      if (audioZero === null) {
+        const at = synth.time();
+        if (at !== null) audioZero = at - secs(performance.now());
+      }
+    };
+    // 放開一定要收，不管修飾鍵
+    const onUp = (e: KeyboardEvent) => {
+      if (releasesAll(e.key)) {
+        session.releaseAll(secs(e.timeStamp));
+        synth.allOff();
+        return;
+      }
+      const key = KEY_MAP[e.code];
+      if (key?.kind !== 'note') return;
+      session.noteOff(key.midi, secs(e.timeStamp));
+      synth.noteOff(key.midi);
+    };
+    // 按著鍵切到別的視窗收不到 keyup：全部放開，音才不會卡住
+    const onBlur = () => {
+      session.releaseAll(secs(performance.now()));
+      synth.allOff();
+    };
+    window.addEventListener('keydown', onDown);
+    window.addEventListener('keyup', onUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.clearInterval(beatTimer);
+      window.removeEventListener('keydown', onDown);
+      window.removeEventListener('keyup', onUp);
+      window.removeEventListener('blur', onBlur);
+      synth.allOff();
+      synth.close();
+      preview.setLive(null);
+    };
+  }, [liveMode]);
 
   useEffect(() => {
     previewRef.current?.setComposition(composition);
@@ -374,16 +478,16 @@ export function App() {
         seek(now + (e.key === 'ArrowRight' ? bar : -bar));
       } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
-        const i = LOOK_LIST.findIndex((lk) => lk.id === lookId);
-        const n = LOOK_LIST.length;
-        const next = LOOK_LIST[(i + (e.key === 'ArrowDown' ? 1 : -1) + n) % n];
+        const i = lookList.findIndex((lk) => lk.id === lookId);
+        const n = lookList.length;
+        const next = lookList[(i + (e.key === 'ArrowDown' ? 1 : -1) + n) % n];
         setLookId(next.id);
         document.getElementById(`look-${next.id}`)?.scrollIntoView({ block: 'nearest' });
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [togglePlay, lookId, setLookId, seek, now, bpm]);
+  }, [togglePlay, lookId, setLookId, seek, now, bpm, lookList]);
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: 整頁是拖放區，沒有鍵盤對應的操作
@@ -408,7 +512,7 @@ export function App() {
     >
       <aside className="panel panel--left">
         <h1 className="logo">
-          oto<span>.</span>
+          nagori<span>.</span>
         </h1>
 
         <label className="drop">
@@ -532,7 +636,7 @@ export function App() {
                 type="button"
                 className="chip"
                 onClick={() => {
-                  setRoot(p.build());
+                  setRoot(liveMode ? liveLayout(p.build()) : p.build());
                   setSelectedId('c1');
                 }}
               >
@@ -703,11 +807,18 @@ export function App() {
           </section>
         )}
 
-        <p className="hint-keys">
-          <kbd>空白</kbd> 播放 <kbd>↑</kbd>
-          <kbd>↓</kbd> 換 look <kbd>←</kbd>
-          <kbd>→</kbd> 跳一小節
-        </p>
+        {liveMode ? (
+          <p className="hint-keys">
+            <kbd>↑</kbd>
+            <kbd>↓</kbd> 換 look
+          </p>
+        ) : (
+          <p className="hint-keys">
+            <kbd>空白</kbd> 播放 <kbd>↑</kbd>
+            <kbd>↓</kbd> 換 look <kbd>←</kbd>
+            <kbd>→</kbd> 跳一小節
+          </p>
+        )}
       </aside>
 
       <main className="stage">
@@ -782,60 +893,64 @@ export function App() {
             </div>
           </div>
         </div>
-        <div className="transport">
-          <button
-            type="button"
-            className="play"
-            onClick={togglePlay}
-            disabled={!ready}
-            aria-label={playing ? '暫停' : '播放'}
-          >
-            {playing ? '❚❚' : '▶'}
-          </button>
-          <div className="transport-info">
-            <div className="transport-title">
-              <span>
-                {ready ? ready.name : '還沒有歌'}
-                {currentLook && (
-                  <span className="look-count">
-                    {'  '}· {String(currentLook.number).padStart(2, '0')} {currentLook.name}
-                  </span>
-                )}
-              </span>
-              <span>
-                {clock(now)} / {clock(duration)}
-              </span>
-            </div>
-            <div
-              className={`scrub${ready ? '' : ' off'}`}
-              role="slider"
-              tabIndex={0}
-              aria-label="播放位置"
-              aria-valuemin={0}
-              aria-valuemax={Math.round(duration)}
-              aria-valuenow={Math.round(now)}
-              onPointerDown={(e) => {
-                e.currentTarget.setPointerCapture(e.pointerId);
-                scrubTo(e);
-              }}
-              onPointerMove={(e) => {
-                if (e.currentTarget.hasPointerCapture(e.pointerId)) scrubTo(e);
-              }}
+        {liveMode ? (
+          <div className="transport live-hint">{KEY_HINT}</div>
+        ) : (
+          <div className="transport">
+            <button
+              type="button"
+              className="play"
+              onClick={togglePlay}
+              disabled={!ready}
+              aria-label={playing ? '暫停' : '播放'}
             >
-              {range && duration > 0 && (
-                <div
-                  className="scrub-range"
-                  style={{
-                    left: `${(range.start / duration) * 100}%`,
-                    width: `${((range.end - range.start) / duration) * 100}%`,
-                  }}
-                />
-              )}
-              <div className="scrub-fill" style={{ width: `${pct}%` }} />
-              <div className="scrub-head" style={{ left: `${pct}%` }} />
+              {playing ? '❚❚' : '▶'}
+            </button>
+            <div className="transport-info">
+              <div className="transport-title">
+                <span>
+                  {ready ? ready.name : '還沒有歌'}
+                  {currentLook && (
+                    <span className="look-count">
+                      {'  '}· {String(currentLook.number).padStart(2, '0')} {currentLook.name}
+                    </span>
+                  )}
+                </span>
+                <span>
+                  {clock(now)} / {clock(duration)}
+                </span>
+              </div>
+              <div
+                className={`scrub${ready ? '' : ' off'}`}
+                role="slider"
+                tabIndex={0}
+                aria-label="播放位置"
+                aria-valuemin={0}
+                aria-valuemax={Math.round(duration)}
+                aria-valuenow={Math.round(now)}
+                onPointerDown={(e) => {
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                  scrubTo(e);
+                }}
+                onPointerMove={(e) => {
+                  if (e.currentTarget.hasPointerCapture(e.pointerId)) scrubTo(e);
+                }}
+              >
+                {range && duration > 0 && (
+                  <div
+                    className="scrub-range"
+                    style={{
+                      left: `${(range.start / duration) * 100}%`,
+                      width: `${((range.end - range.start) / duration) * 100}%`,
+                    }}
+                  />
+                )}
+                <div className="scrub-fill" style={{ width: `${pct}%` }} />
+                <div className="scrub-head" style={{ left: `${pct}%` }} />
+              </div>
             </div>
           </div>
-        </div>
+        )}
         {/* biome-ignore lint/a11y/useMediaCaption: 預覽用的音軌，無字幕 */}
         <audio ref={audioRef} />
       </main>
@@ -858,11 +973,11 @@ export function App() {
             </div>
           </div>
           <div className="section-label" style={{ margin: 0 }}>
-            Looks <span className="look-count">{LOOK_LIST.length}</span>
+            Looks <span className="look-count">{lookList.length}</span>
           </div>
         </div>
         <div className="look-list">
-          {GROUPED_LOOKS.map((g) => (
+          {lookGroups.map((g) => (
             <section key={g.id} className="look-group">
               <h3 className="look-group-head">
                 {g.name} <span className="look-count">{g.looks.length}</span>

@@ -160,3 +160,12 @@ test('readouts: WINDOW, NOTES sounding/total, RANGE, SOURCE', () => {
     { label: 'SOURCE', value: 'audio' },
   ]);
 });
+
+test('讀數有 noteRange 時列範圍照它，不看 notes', () => {
+  const range = (notes: NoteEvent[]) =>
+    rollLook
+      .readouts?.(makeCtx(0, { notes, noteRange: [58, 74] }))
+      ?.find((r) => r.label === 'RANGE')?.value;
+  expect(range([note(0, 36)])).toBe('A♯3–D5');
+  expect(range([note(0, 60)])).toBe('A♯3–D5');
+});
