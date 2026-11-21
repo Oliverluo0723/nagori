@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900" font-family="Helvetica Neue, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#444"/></marker>
+    <style>
+      .box{fill:#fff;stroke:#222;stroke-width:2}
+      .hot{fill:#fff1ec;stroke:#ff4a1c;stroke-width:2.5}
+      .h{font-size:24px;font-weight:700;fill:#111}
+      .t{font-size:17px;fill:#444}
+      .s{font-size:15px;fill:#777}
+      .sec{font-size:15px;font-weight:700;fill:#ff4a1c;letter-spacing:2px}
+      .ln{stroke:#444;stroke-width:2;fill:none;marker-end:url(#a)}
+    </style>
+  </defs>
+  <rect width="1600" height="900" fill="#f6f5f2"/>
+  <text x="60" y="70" font-size="40" font-weight="800" fill="#111">oto：歌 → 讀數 → 畫面 → Reel</text>
+  <text x="60" y="105" class="t">一首歌只分析一次；每個 look 都是「t + 讀數 → 一幀」的純函式；預覽和輸出共用同一個 renderFrame</text>
+
+  <!-- 1 分析 -->
+  <text x="60" y="160" class="sec">1  分析（Web Worker）</text>
+  <rect x="60" y="175" width="200" height="90" rx="10" class="box"/>
+  <text x="80" y="212" class="h">mp3 / wav</text><text x="80" y="242" class="s">可附 .mid（優先）</text>
+  <rect x="320" y="175" width="260" height="90" rx="10" class="box"/>
+  <text x="340" y="212" class="h">Demucs 分軌</text><text x="340" y="242" class="s">ONNX 172MB・OPFS 快取</text>
+  <path d="M260 220H316" class="ln"/>
+  <g class="t">
+    <rect x="640" y="160" width="400" height="120" rx="10" class="box"/>
+    <text x="660" y="190">drums 軌 → kick / snare / hat</text>
+    <text x="660" y="218">bass 軌 → bass 音高</text>
+    <text x="660" y="246">other 軌 → 和弦、調</text>
+    <text x="660" y="272" class="s">混音 → BPM、節拍格、頻譜</text>
+  </g>
+  <path d="M580 220H636" class="ln"/>
+  <rect x="1100" y="175" width="440" height="90" rx="10" class="hot"/>
+  <text x="1120" y="212" class="h">Readings 樂曲讀數</text>
+  <text x="1120" y="242" class="s">所有 look 只能讀它・同輸入同輸出</text>
+  <path d="M1040 220H1096" class="ln"/>
+
+  <!-- 2 look -->
+  <text x="60" y="345" class="sec">2  LOOK（24 個）</text>
+  <rect x="60" y="360" width="700" height="150" rx="10" class="box"/>
+  <text x="80" y="398" class="h">look.draw(painter, { t, w, h, readings, theme })</text>
+  <text x="80" y="430" class="t">不讀時鐘、不用亂數；尺寸全乘 h → 540 或 1080 畫出同一張圖</text>
+  <text x="80" y="458" class="t">顏色只用主題語意色：黑底發光／紙感墨印</text>
+  <text x="80" y="486" class="s">依聽的樂器分組：鼓・Bass・和弦・頻譜・綜合</text>
+  <path d="M1320 265V300H410V356" class="ln"/>
+
+  <!-- 3 拼版 -->
+  <text x="820" y="345" class="sec">3  拼版</text>
+  <rect x="820" y="360" width="720" height="150" rx="10" class="box"/>
+  <text x="840" y="398" class="h">切格樹 → renderFrame</text>
+  <text x="840" y="430" class="t">安全區 → 每格（報表框 + look）→ 底欄（進度・時間・簽名）</text>
+  <text x="840" y="458" class="t">點選格子・左右／上下切・拖切線・版型（四格、大＋三…）</text>
+  <text x="840" y="486" class="s">下一步：影片格（mp4 cover、釘時間軸、鏡像）</text>
+  <path d="M760 435H816" class="ln"/>
+
+  <!-- 4 輸出 -->
+  <text x="60" y="575" class="sec">4  預覽與輸出（同一個 renderFrame）</text>
+  <rect x="60" y="590" width="700" height="130" rx="10" class="box"/>
+  <text x="80" y="628" class="h">預覽 540×960</text>
+  <text x="80" y="660" class="t">&lt;audio&gt; 播歌，每個畫面更新取 currentTime 畫一幀</text>
+  <text x="80" y="690" class="s">可拖播放線・← → 跳小節</text>
+  <rect x="820" y="590" width="720" height="130" rx="10" class="hot"/>
+  <text x="840" y="628" class="h">輸出 1080×1920 mp4</text>
+  <text x="840" y="660" class="t">第 i 幀畫 t = start + i/30 → WebCodecs H.264 + AAC → mediabunny</text>
+  <text x="840" y="690" class="s">15 秒／30 秒／整首・起點吸附小節・15 秒約 4 秒做完</text>
+  <path d="M1180 510V586" class="ln"/><path d="M1000 510V550H410V586" class="ln"/>
+
+  <!-- 流程 -->
+  <text x="60" y="785" class="sec">使用流程</text>
+  <text x="60" y="825" font-size="22" fill="#111">丟歌 → 分析 → 選版型／切格 → 每格選 look → 選主題 → 拖播放線 → 選長度 → 輸出 mp4 → 上傳 IG</text>
+  <text x="60" y="865" class="s">Vite・TypeScript・React・p5（離屏畫布）・essentia.js・demucs-web + onnxruntime-web・mediabunny・vitest 264 測試・僅 Chrome</text>
+</svg>

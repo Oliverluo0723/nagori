@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900" font-family="Helvetica Neue, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 10 5 0 10z" fill="#444"/></marker>
+    <style>
+      .box{fill:#fff;stroke:#222;stroke-width:2}
+      .hot{fill:#fff1ec;stroke:#ff4a1c;stroke-width:2.5}
+      .dash{fill:#fff;stroke:#999;stroke-width:2;stroke-dasharray:6 5}
+      .h{font-size:22px;font-weight:700;fill:#111}
+      .t{font-size:16px;fill:#444}
+      .s{font-size:14px;fill:#777}
+      .sec{font-size:14px;font-weight:700;fill:#ff4a1c;letter-spacing:2px}
+      .ln{stroke:#444;stroke-width:2;fill:none;marker-end:url(#a)}
+      .no{stroke:#999;stroke-width:2;fill:none;stroke-dasharray:6 5;marker-end:url(#a)}
+    </style>
+  </defs>
+  <rect width="1600" height="900" fill="#f6f5f2"/>
+  <text x="60" y="70" font-size="40" font-weight="800" fill="#111">Demucs 分軌：先拆樂器，再各聽各的</text>
+  <text x="60" y="105" class="t">混音裡 150–300 Hz 的 pad／弦樂會被誤當成 bass；拆成四軌後 bass 覆蓋率 41% → 69%，錯抓高八度歸零</text>
+
+  <!-- 輸入 + 快取判斷 -->
+  <text x="60" y="160" class="sec">1  丟歌</text>
+  <rect x="60" y="175" width="230" height="100" rx="10" class="box"/>
+  <text x="80" y="212" class="h">音檔</text>
+  <text x="80" y="240" class="t">44.1 kHz 立體聲</text>
+  <text x="80" y="262" class="s">左右聲道分開解碼</text>
+
+  <rect x="350" y="175" width="290" height="100" rx="10" class="box"/>
+  <text x="370" y="212" class="h">SHA-256(音檔內容)</text>
+  <text x="370" y="240" class="t">快取 key：看內容不看檔名</text>
+  <text x="370" y="262" class="s">改名照樣命中；同名不同歌不會誤用</text>
+  <path d="M290 225H346" class="ln"/>
+
+  <rect x="700" y="175" width="300" height="100" rx="10" class="hot"/>
+  <text x="720" y="212" class="h">快取有嗎？</text>
+  <text x="720" y="240" class="t">① 記憶體（同分頁）</text>
+  <text x="720" y="262" class="t">② OPFS（重開瀏覽器也在）</text>
+  <path d="M640 225H696" class="ln"/>
+
+  <text x="1060" y="200" class="t" fill="#111">有 → 直接拿四軌</text>
+  <text x="1060" y="222" class="s">第二次分析約 7–8 秒</text>
+  <path d="M1000 205H1050" class="ln"/>
+  <path d="M1250 230V560" class="ln"/>
+
+  <!-- 推論 -->
+  <text x="60" y="340" class="sec">2  沒有 → 在瀏覽器裡分軌（Web Worker）</text>
+  <path d="M850 275V300H230V356" class="ln"/>
+  <rect x="60" y="360" width="340" height="150" rx="10" class="box"/>
+  <text x="80" y="397" class="h">htdemucs.onnx</text>
+  <text x="80" y="425" class="t">Meta 開源・Hybrid Transformer</text>
+  <text x="80" y="451" class="t">172 MB，不進 git</text>
+  <text x="80" y="477" class="s">pnpm setup:models → public/models/</text>
+
+  <rect x="460" y="360" width="340" height="150" rx="10" class="box"/>
+  <text x="480" y="397" class="h">onnxruntime-web</text>
+  <text x="480" y="425" class="t">WASM 後端，跑在 Worker</text>
+  <text x="480" y="451" class="t">主畫面不卡</text>
+  <text x="480" y="477" class="s">即時 4–6 倍速・3 分鐘歌約 30–45 秒</text>
+  <path d="M400 435H456" class="ln"/>
+
+  <rect x="860" y="360" width="300" height="150" rx="10" class="box"/>
+  <text x="880" y="397" class="h">分段推論</text>
+  <text x="880" y="425" class="t">切成數秒一段</text>
+  <text x="880" y="451" class="t">段與段重疊再拼回</text>
+  <text x="880" y="477" class="s">記憶體固定，不隨歌長增加</text>
+  <path d="M800 435H856" class="ln"/>
+  <path d="M1160 435H1210V470" class="ln"/>
+  <text x="1170" y="412" class="s">寫入快取</text>
+
+  <rect x="60" y="535" width="340" height="56" rx="10" class="dash"/>
+  <text x="80" y="569" class="t">找不到模型 → 改聽混音，畫面提示</text>
+
+  <!-- 四軌 -->
+  <text x="60" y="640" class="sec">3  四軌 → 各偵測器只聽自己那軌</text>
+  <g>
+    <rect x="60" y="655" width="270" height="110" rx="10" class="hot"/>
+    <text x="80" y="692" class="h">drums 軌</text><text x="80" y="722" class="t">→ kick / snare / hat</text>
+    <rect x="350" y="655" width="270" height="110" rx="10" class="hot"/>
+    <text x="370" y="692" class="h">bass 軌</text><text x="370" y="722" class="t">→ bass 音高</text>
+    <rect x="640" y="655" width="270" height="110" rx="10" class="hot"/>
+    <text x="660" y="692" class="h">other 軌</text><text x="660" y="722" class="t">→ 和弦、調</text>
+    <rect x="930" y="655" width="200" height="110" rx="10" class="dash"/>
+    <text x="950" y="692" class="h" fill="#777">vocals 軌</text><text x="950" y="722" class="s">目前沒用到</text>
+    <rect x="1150" y="560" width="390" height="205" rx="10" class="box"/>
+    <text x="1170" y="597" class="h">原本的混音</text>
+    <text x="1170" y="627" class="t">→ BPM、節拍格、頻譜</text>
+    <text x="1170" y="651" class="s">要完整的能量與節奏，不拆</text>
+    <text x="1170" y="690" class="h" font-size="18">−35 dB 關卡</text>
+    <text x="1170" y="716" class="t">某軌比混音小 35 dB 以上</text>
+    <text x="1170" y="740" class="t">= 只是漏音 → 改回聽混音</text>
+  </g>
+
+  <text x="60" y="825" class="s">不拆吉他／鋼琴：六軌版 Demucs 的鋼琴軌品質太差。MIDI 永遠優先：有 .mid 的角色軌就不分軌。</text>
+  <text x="60" y="860" class="s">程式：src/analysis/stems/separate.ts（包 demucs-web）・cache.ts（記憶體 + OPFS）・src/analysis/worker.ts</text>
+</svg>
