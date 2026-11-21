@@ -12,10 +12,16 @@ const ORT_WASM = new URL(
   import.meta.url,
 );
 
-/** 模型由 `pnpm setup:models` 放進 public/models/，同源提供（COEP 之下跨域要 CORS，自己放最省事） */
-export const MODEL_URL = '/models/htdemucs_embedded.onnx';
 export const MODEL_SOURCE =
   'https://huggingface.co/timcsy/demucs-web-onnx/resolve/main/htdemucs_embedded.onnx';
+/**
+ * 本機：`pnpm setup:models` 放進 public/models/，同源提供。
+ * GitHub Pages：模型 172 MB 進不了 git，build 時設 VITE_STEMS_MODEL_URL 直接抓 Hugging Face
+ * （有回 Access-Control-Allow-Origin: *，COEP require-corp 之下照樣能抓）。
+ */
+export const MODEL_URL: string =
+  import.meta.env.VITE_STEMS_MODEL_URL ||
+  `${import.meta.env.BASE_URL}models/htdemucs_embedded.onnx`;
 export const MODEL_BYTES = 180534758;
 /** separateStems 在模型不在時丟的錯誤訊息開頭（useProject 靠它挑提示文字） */
 export const MODEL_MISSING = 'model missing';

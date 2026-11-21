@@ -12,8 +12,8 @@ import {
  * 只在瀏覽器／Worker 跑；Node 測試給 runAnalysis 注入假的 TranscribeFn（和 SeparateFn 同一套做法）。
  */
 
-/** 模型由 `pnpm setup:models` 從 node_modules 複製進 public/models/basic-pitch/ */
-export const NOTES_MODEL_URL = '/models/basic-pitch/model.json';
+/** 模型由 `pnpm setup:models` 從 node_modules 複製進 public/models/basic-pitch/（部署在子路徑時跟著 BASE_URL） */
+export const NOTES_MODEL_URL = `${import.meta.env.BASE_URL}models/basic-pitch/model.json`;
 /** 模型不在時丟的錯誤訊息開頭 */
 export const NOTES_MODEL_MISSING = 'notes model missing';
 

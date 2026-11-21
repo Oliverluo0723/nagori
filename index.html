@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nagori</title>
+    <!-- GitHub Pages 不能設 COOP/COEP header：用 service worker 補上，onnxruntime 才拿得到 SharedArrayBuffer 開多執行緒。
+         本機 vite dev/preview 已經送了 header（crossOriginIsolated 為 true），這支腳本什麼都不做。 -->
+    <script src="/coi-serviceworker.js"></script>
   </head>
   <body>
     <div id="root"></div>
